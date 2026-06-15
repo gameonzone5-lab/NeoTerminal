@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <android/log.h>
 #include <vector>
+#include <cstring>
 
 #define LOG_TAG "NeoTerminal_Native"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -14,14 +15,20 @@ static int pty_master_fd = -1;
 
 extern "C" JNIEXPORT jint JNICALL
 Java_com_neoterminal_core_TerminalActivity_startPty(JNIEnv* env, jobject thiz) {
-    pty_master_fd = posix_openpt(O_RDWR | O_NOCTTY, 0);
+    // Fix 1: posix_openpt in Bionic takes only 1 argument (flags)
+    pty_master_fd = posix_openpt(O_RDWR | O_NOCTTY);
     if (pty_master_fd == -1) return -1;
 
-    grantaccess(pty_master_fd, 0);
+    // Fix 2: The correct function is grantpt, not grantaccess
+    grantpt(pty_master_fd);
 
     pid_t pid = fork();
     if (pid == 0) { // Child process
-        int slave_fd = ptsname_open(ptsname(pty_master_fd, NULL), O_RDWR);
+        // Fix 3: ptsname(fd) returns the path, then we open it.
+        const char* slave_name = ptsname(pty_master_fd);
+        if (slave_name == NULL) _exit(1);
+        
+        int slave_fd = open(slave_name, O_RDWR);
         if (slave_fd == -1) _exit(1);
 
         setsid();
