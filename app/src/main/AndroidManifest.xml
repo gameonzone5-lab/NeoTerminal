@@ -6,7 +6,7 @@
         android:label="NeoTerminal"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         <activity
-            android:name=".TerminalActivity"
+            android:name=".core.TerminalActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
