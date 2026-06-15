@@ -1,36 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout 
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:background="#000000">
-
     <TextView
-        android:id="@+id/terminal_output"
+        android:id="@+id/terminalOutput"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_height="match_parent"
         android:textColor="#00FF00"
         android:fontFamily="monospace"
-        android:text="NeoTerminal v1.0\nReady for input...\n$"
         android:padding="8dp"
-        android:textSize="12sp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_bottom_toTopOf="@id/extra_keys_row" />
-
-    <LinearLayout
-        android:id="@+id/extra_keys_row"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="#1A1A1A"
-        android:padding="4dp"
-        app:layout_bottom_toBottomOf="parent">
-
-        <Button android:id="@+id/btn_ctrl" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="CTRL" android:textSize="10sp" />
-        <Button android:id="@+id/btn_alt" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="ALT" android:textSize="10sp" />
-        <Button android:id="@+id/btn_esc" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="ESC" android:textSize="10sp" />
-        <Button android:id="@+id/btn_tab" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="TAB" android:textSize="10sp" />
-    </LinearLayout>
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+        android:text="Welcome to NeoTerminal\n$ " />
+</LinearLayout>

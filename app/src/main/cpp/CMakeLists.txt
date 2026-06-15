@@ -1,7 +1,4 @@
-cmake_minimum_required(VERSION 3.10.2)
+cmake_minimum_required(VERSION 3.22.1)
 project("neoterminal_native")
-
-add_library(neoterminal_native SHARED terminal_backend.cpp)
-
-find_library(log-lib log)
-target_link_libraries(neoterminal_native ${log-lib})
+add_library(${CMAKE_PROJECT_NAME} SHARED terminal_backend.cpp)
+target_link_libraries(${CMAKE_PROJECT_NAME} android log)
