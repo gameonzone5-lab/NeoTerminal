@@ -3,16 +3,14 @@ package com.neoterminal.core
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 import android.util.Log
+import androidx.appcompat.app.AppCompatActivity
 import com.neoterminal.core.R
 
 class TerminalActivity : AppCompatActivity() {
 
     private lateinit var terminalOutput: TextView
-    private var isCtrlPressed = false
-    private var isAltPressed = false
-
+    
     private external fun startPty(): Int
     private external fun writeCommand(cmd: String)
     private external fun readOutput(): String
@@ -35,38 +33,32 @@ class TerminalActivity : AppCompatActivity() {
 
     private fun initTerminal() {
         try {
-            val ptyFd = startPty()
-            terminalOutput.append("\n[Native PTY Started with FD: $ptyFd]\n")
-            terminalOutput.append("neo@android:~$ ")
-        } catch (e: UnsatisfiedLinkError) {
-            Log.e("NeoTerminal", "Native library not loaded: ${e.message}")
-            terminalOutput.append("\n[Error: Native Library not loaded]\n")
+            val fd = startPty()
+            if (fd != -1) {
+                terminalOutput.append("\n[System] PTY initialized (FD: $fd)\n")
+                terminalOutput.append("neo@android:~$ ")
+            } else {
+                terminalOutput.append("\n[Error] Failed to open PTY\n")
+            }
+        } catch (e: Exception) {
+            Log.e("NeoTerminal", "Init failed: ${e.message}")
+            terminalOutput.append("\n[Critical] Native load error\n")
         }
     }
 
     private fun setupExtraKeys() {
-        findViewById<Button>(R.id.btn_ctrl).setOnClickListener {
-            isCtrlPressed = !isCtrlPressed
-            handleKeyInput("CTRL")
-        }
-        findViewById<Button>(R.id.btn_alt).setOnClickListener {
-            isAltPressed = !isAltPressed
-            handleKeyInput("ALT")
-        }
-        findViewById<Button>(R.id.btn_esc).setOnClickListener {
-            handleKeyInput("\u001B")
-        }
-        findViewById<Button>(R.id.btn_tab).setOnClickListener {
-            handleKeyInput("\t")
-        }
+        findViewById<Button>(R.id.btn_ctrl).setOnClickListener { handleKey("\u0003") } // Ctrl+C
+        findViewById<Button>(R.id.btn_alt).setOnClickListener { handleKey("\u001B") } // Alt/Esc
+        findViewById<Button>(R.id.btn_esc).setOnClickListener { handleKey("\u001B") }
+        findViewById<Button>(R.id.btn_tab).setOnClickListener { handleKey("\t") }
     }
 
-    private fun handleKeyInput(input: String) {
-        terminalOutput.append(" [$input] ")
+    private fun handleKey(key: String) {
+        terminalOutput.append(" [$key] ")
         try {
-            writeCommand(input)
+            writeCommand(key)
         } catch (e: Exception) {
-            Log.e("NeoTerminal", "Failed to write command: ${e.message}")
+            Log.e("NeoTerminal", "Write failed")
         }
     }
 }
