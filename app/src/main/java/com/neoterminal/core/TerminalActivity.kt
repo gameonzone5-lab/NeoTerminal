@@ -1,11 +1,11 @@
 package com.neoterminal.core
-import com.neoterminal.core.R
 
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import android.util.Log
+import com.neoterminal.core.R
 
 class TerminalActivity : AppCompatActivity() {
 
@@ -13,7 +13,6 @@ class TerminalActivity : AppCompatActivity() {
     private var isCtrlPressed = false
     private var isAltPressed = false
 
-    // JNI Declarations for NDK Backend
     private external fun startPty(): Int
     private external fun writeCommand(cmd: String)
     private external fun readOutput(): String
@@ -39,7 +38,7 @@ class TerminalActivity : AppCompatActivity() {
             val ptyFd = startPty()
             terminalOutput.append("\n[Native PTY Started with FD: $ptyFd]\n")
             terminalOutput.append("neo@android:~$ ")
-        } catch (e: UnsatisfelyLinkError) {
+        } catch (e: UnsatisfiedLinkError) {
             Log.e("NeoTerminal", "Native library not loaded: ${e.message}")
             terminalOutput.append("\n[Error: Native Library not loaded]\n")
         }
@@ -55,18 +54,15 @@ class TerminalActivity : AppCompatActivity() {
             handleKeyInput("ALT")
         }
         findViewById<Button>(R.id.btn_esc).setOnClickListener {
-            handleKeyInput("") // ESC character
+            handleKeyInput("\u001B")
         }
         findViewById<Button>(R.id.btn_tab).setOnClickListener {
-            handleKeyInput("	") // TAB character
+            handleKeyInput("\t")
         }
     }
 
     private fun handleKeyInput(input: String) {
         terminalOutput.append(" [$input] ")
-        
-        // In a real scenario, we combine modifiers with the actual key
-        // For now, we send the raw input to the native layer
         try {
             writeCommand(input)
         } catch (e: Exception) {
