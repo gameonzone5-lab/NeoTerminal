@@ -1,67 +1,27 @@
 #include <jni.h>
 #include <string>
-#include <unistd.h>
-#include <termios.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <android/log.h>
-#include <vector>
-#include <cstring>
-
-#define LOG_TAG "NeoTerminal_Native"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-
-static int pty_master_fd = -1;
-
-extern "C" JNIEXPORT jint JNICALL
-Java_com_neoterminal_core_TerminalActivity_startPty(JNIEnv* env, jobject thiz) {
-    // Fix 1: posix_openpt in Bionic takes only 1 argument (flags)
-    pty_master_fd = posix_openpt(O_RDWR | O_NOCTTY);
-    if (pty_master_fd == -1) return -1;
-
-    // Fix 2: The correct function is grantpt, not grantaccess
-    grantpt(pty_master_fd);
-
-    pid_t pid = fork();
-    if (pid == 0) { // Child process
-        // Fix 3: ptsname(fd) returns the path, then we open it.
-        const char* slave_name = ptsname(pty_master_fd);
-        if (slave_name == NULL) _exit(1);
-        
-        int slave_fd = open(slave_name, O_RDWR);
-        if (slave_fd == -1) _exit(1);
-
-        setsid();
-        dup2(slave_fd, 0);
-        dup2(slave_fd, 1);
-        dup2(slave_fd, 2);
-        close(slave_fd);
-
-        execl("/system/bin/sh", "/system/bin/sh", (char *)NULL);
-        _exit(1);
-    }
-
-    return pty_master_fd;
-}
-
-extern "C" JNIEXPORT void JNICALL
-Java_com_neoterminal_core_TerminalActivity_writeCommand(JNIEnv* env, jobject thiz, jstring cmd) {
-    if (cmd == NULL) return;
-    const char* str = env->GetStringUTFChars(cmd, NULL);
-    if (pty_master_fd != -1) {
-        write(pty_master_fd, str, strlen(str));
-    }
-    env->ReleaseStringUTFChars(cmd, str);
-}
+#include <stdexcept>
+#include <stdio.h>
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_neoterminal_core_TerminalActivity_readOutput(JNIEnv* env, jobject thiz) {
-    if (pty_master_fd == -1) return env->NewStringUTF("PTY not started");
-    
-    char buffer[4096];
-    ssize_t n = read(pty_master_fd, buffer, sizeof(buffer) - 1);
-    if (n <= 0) return env->NewStringUTF("");
-    
-    buffer[n] = '\0';
-    return env->NewStringUTF(buffer);
+Java_com_neoterminal_core_TerminalActivity_executeCommand(JNIEnv* env, jobject /* this */, jstring command) {
+    const char *cmd = env->GetStringUTFChars(command, nullptr);
+    char buffer[256];
+    std::string result = "";
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe) {
+        env->ReleaseStringUTFChars(command, cmd);
+        return env->NewStringUTF("popen() failed!");
+    }
+    try {
+        while (fgets(buffer, sizeof buffer, pipe) != NULL) {
+            result += buffer;
+        }
+    } catch (...) {
+        env->ReleaseStringUTFChars(command, cmd);
+        return env->NewStringUTF("Execution error!");
+    }
+    pclose(pipe);
+    env->ReleaseStringUTFChars(command, cmd);
+    return env->NewStringUTF(result.c_str());
 }

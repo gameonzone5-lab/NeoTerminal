@@ -2,63 +2,39 @@ package com.neoterminal.core
 
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
-import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
-import com.neoterminal.core.R
 
 class TerminalActivity : AppCompatActivity() {
-
-    private lateinit var terminalOutput: TextView
-    
-    private external fun startPty(): Int
-    private external fun writeCommand(cmd: String)
-    private external fun readOutput(): String
+    private external fun executeCommand(command: String): String
 
     companion object {
-        init {
-            System.loadLibrary("neoterminal_native")
-        }
+        init { System.loadLibrary("neoterminal_native") }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        terminalOutput = findViewById(R.id.terminal_output)
-        
-        setupExtraKeys()
-        initTerminal()
-    }
+        val outputText = findViewById<TextView>(R.id.terminalOutput)
+        val inputCommand = findViewById<EditText>(R.id.inputCommand)
+        val runBtn = findViewById<Button>(R.id.runButton)
 
-    private fun initTerminal() {
-        try {
-            val fd = startPty()
-            if (fd != -1) {
-                terminalOutput.append("\n[System] PTY initialized (FD: $fd)\n")
-                terminalOutput.append("neo@android:~$ ")
-            } else {
-                terminalOutput.append("\n[Error] Failed to open PTY\n")
+        outputText.text = "NeoTerminal Initialized.\nWelcome to Termux Alternative.\n"
+
+        runBtn.setOnClickListener {
+            val cmd = inputCommand.text.toString()
+            if(cmd.isNotEmpty()){
+                outputText.append("\nneoterminal~$ $cmd\n")
+                try {
+                    val result = executeCommand(cmd)
+                    outputText.append(result)
+                } catch (e: Exception) {
+                    outputText.append("Error: ${e.message}\n")
+                }
+                inputCommand.text.clear()
             }
-        } catch (e: Exception) {
-            Log.e("NeoTerminal", "Init failed: ${e.message}")
-            terminalOutput.append("\n[Critical] Native load error\n")
-        }
-    }
-
-    private fun setupExtraKeys() {
-        findViewById<Button>(R.id.btn_ctrl).setOnClickListener { handleKey("\u0003") } // Ctrl+C
-        findViewById<Button>(R.id.btn_alt).setOnClickListener { handleKey("\u001B") } // Alt/Esc
-        findViewById<Button>(R.id.btn_esc).setOnClickListener { handleKey("\u001B") }
-        findViewById<Button>(R.id.btn_tab).setOnClickListener { handleKey("\t") }
-    }
-
-    private fun handleKey(key: String) {
-        terminalOutput.append(" [$key] ")
-        try {
-            writeCommand(key)
-        } catch (e: Exception) {
-            Log.e("NeoTerminal", "Write failed")
         }
     }
 }
