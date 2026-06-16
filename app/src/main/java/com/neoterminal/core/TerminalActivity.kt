@@ -6,9 +6,9 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.ScrollView
 import android.util.Log
-import android.app.Activity
+import androidx.appcompat.app.AppCompatActivity
 
-class TerminalActivity : Activity() {
+class TerminalActivity : AppCompatActivity() {
     private var libraryLoaded = false
     private external fun executeCommand(command: String): String
 
