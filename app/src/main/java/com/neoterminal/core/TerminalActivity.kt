@@ -6,28 +6,15 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.ScrollView
 import android.util.Log
-import androidx.appcompat.app.AppCompatActivity
+import android.app.Activity
 
-class TerminalActivity : AppCompatActivity() {
+class TerminalActivity : Activity() {
     private var libraryLoaded = false
     private external fun executeCommand(command: String): String
-
-    companion object {
-        private const val TAG = "NeoTerminalNative"
-        init {
-            try {
-                System.loadLibrary("neoterminal_native")
-                Log.i(TAG, "Native library loaded successfully")
-            } catch (t: Throwable) {
-                Log.e(TAG, "Failed to load native library: ${t.message}")
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Wrap everything in a try-catch to catch layout inflation errors
         try {
             setContentView(R.layout.activity_main)
 
@@ -36,24 +23,20 @@ class TerminalActivity : AppCompatActivity() {
             val runBtn = findViewById<Button>(R.id.runButton)
             val scroll = findViewById<ScrollView>(R.id.terminalScroll)
 
-            // Verify all critical views are present
-            if (outputText == null || inputCommand == null || runBtn == null) {
-                throw IllegalStateException("Required UI views are missing from layout")
-            }
-
-            // Check if native library is actually functional
+            // LOAD LIBRARY INSIDE ONCREATE (No Companion Object)
             try {
-                // Small dummy call or just check a known state
-                libraryLoaded = true 
-            } catch (e: Throwable) {
+                System.loadLibrary("neoterminal_native")
+                libraryLoaded = true
+                Log.i("NeoTerminal", "Native library loaded successfully in onCreate")
+            } catch (t: Throwable) {
                 libraryLoaded = false
+                Log.e("NeoTerminal", "Failed to load native library: ${t.message}")
+                outputText?.text = "FATAL ERROR: Native library 'neoterminal_native' not found.\n" +
+                                   "The app will not crash, but commands will not work."
             }
 
-            if (!libraryLoaded) {
-                outputText.text = "CRITICAL ERROR: Native Bridge Not Found\n" +
-                                  "The JNI library 'neoterminal_native' is missing or incompatible.\n" +
-                                  "Please re-install the APK for your specific device architecture."
-                runBtn.isEnabled = false
+            if (outputText == null || inputCommand == null || runBtn == null) {
+                throw IllegalStateException("Required UI views are missing")
             }
 
             runBtn.setOnClickListener {
@@ -65,7 +48,7 @@ class TerminalActivity : AppCompatActivity() {
                             val result = executeCommand(cmd)
                             outputText.append(result)
                         } else {
-                            outputText.append("Error: Native library not available.\n")
+                            outputText.append("Error: Native bridge unavailable.\n")
                         }
                     } catch (t: Throwable) {
                         outputText.append("Runtime Error: ${t.message}\n")
@@ -77,8 +60,7 @@ class TerminalActivity : AppCompatActivity() {
                 }
             }
         } catch (t: Throwable) {
-            // Last resort: if layout inflation fails, we can't even show the outputText
-            Log.e(TAG, "Fatal crash during onCreate: ${t.message}")
+            Log.e("NeoTerminal", "Fatal crash during onCreate: ${t.message}")
         }
     }
 }
