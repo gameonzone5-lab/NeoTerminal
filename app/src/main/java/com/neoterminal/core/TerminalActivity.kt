@@ -6,9 +6,9 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.ScrollView
 import android.util.Log
-import androidx.appcompat.app.AppCompatActivity
+import android.app.Activity
 
-class TerminalActivity : AppCompatActivity() {
+class TerminalActivity : Activity() {
     private var libraryLoaded = false
     private external fun executeCommand(command: String): String
 
@@ -23,11 +23,11 @@ class TerminalActivity : AppCompatActivity() {
             val runBtn = findViewById<Button>(R.id.runButton)
             val scroll = findViewById<ScrollView>(R.id.terminalScroll)
 
-            // LOAD LIBRARY INSIDE ONCREATE (No Companion Object)
+            // Load library safely inside onCreate
             try {
                 System.loadLibrary("neoterminal_native")
                 libraryLoaded = true
-                Log.i("NeoTerminal", "Native library loaded successfully in onCreate")
+                Log.i("NeoTerminal", "Native library loaded successfully")
             } catch (t: Throwable) {
                 libraryLoaded = false
                 Log.e("NeoTerminal", "Failed to load native library: ${t.message}")
@@ -36,7 +36,8 @@ class TerminalActivity : AppCompatActivity() {
             }
 
             if (outputText == null || inputCommand == null || runBtn == null) {
-                throw IllegalStateException("Required UI views are missing")
+                Log.e("NeoTerminal", "Critical UI components missing")
+                return 
             }
 
             runBtn.setOnClickListener {
