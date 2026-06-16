@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import android.widget.ScrollView
 import androidx.appcompat.app.AppCompatActivity
 
 class TerminalActivity : AppCompatActivity() {
@@ -11,7 +12,11 @@ class TerminalActivity : AppCompatActivity() {
 
     companion object {
         init {
-            System.loadLibrary("neoterminal_native")
+            try {
+                System.loadLibrary("neoterminal_native")
+            } catch (e: UnsatisfiedLinkError) {
+                // Log error or handle missing library
+            }
         }
     }
 
@@ -22,6 +27,7 @@ class TerminalActivity : AppCompatActivity() {
         val outputText = findViewById<TextView>(R.id.terminalOutput)
         val inputCommand = findViewById<EditText>(R.id.inputCommand)
         val runBtn = findViewById<Button>(R.id.runButton)
+        val scroll = findViewById<ScrollView>(R.id.terminalScroll)
 
         runBtn.setOnClickListener {
             val cmd = inputCommand.text.toString().trim()
@@ -34,11 +40,10 @@ class TerminalActivity : AppCompatActivity() {
                     outputText.append("Runtime Error: ${e.message}\n")
                 }
                 inputCommand.text.clear()
-                // Auto-scroll to bottom
-                outputText.post {
-                    val scroll = findViewById<android.widget.ScrollView>(R.id.terminalOutput).parent as? android.widget.ScrollView
-                    // In the XML I put the TextView inside the ScrollView. 
-                    // The ScrollView doesn't have an ID in the XML provided, let me fix that in the logic.
+                
+                // Correctly scroll to bottom
+                scroll?.post {
+                    scroll.fullScroll(ScrollView.FOCUS_DOWN)
                 }
             }
         }
