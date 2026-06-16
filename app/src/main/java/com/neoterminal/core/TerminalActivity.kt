@@ -1,67 +1,39 @@
 package com.neoterminal.core
-
+import android.app.Activity
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.ScrollView
-import android.util.Log
-import androidx.appcompat.app.AppCompatActivity
+class TerminalActivity : Activity() {
+private var isNativeLoaded = false
+private external fun executeCommand(command: String): String
+override fun onCreate(savedInstanceState: Bundle?) {
 
-class TerminalActivity : AppCompatActivity() {
-    private var libraryLoaded = false
-    private external fun executeCommand(command: String): String
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
-        try {
-            setContentView(R.layout.activity_main)
-
-            val outputText = findViewById<TextView>(R.id.terminalOutput)
-            val inputCommand = findViewById<EditText>(R.id.inputCommand)
-            val runBtn = findViewById<Button>(R.id.runButton)
-            val scroll = findViewById<ScrollView>(R.id.terminalScroll)
-
-            // Load library safely inside onCreate to prevent static block crashes
-            try {
-                System.loadLibrary("neoterminal_native")
-                libraryLoaded = true
-                Log.i("NeoTerminal", "Native library loaded successfully")
-            } catch (t: Throwable) {
-                libraryLoaded = false
-                Log.e("NeoTerminal", "Failed to load native library: ${t.message}")
-                outputText?.text = "FATAL ERROR: Native library 'neoterminal_native' not found.\n" +
-                                   "The app will not crash, but commands will not work."
-            }
-
-            if (outputText == null || inputCommand == null || runBtn == null) {
-                Log.e("NeoTerminal", "Critical UI components missing")
-                return 
-            }
-
-            runBtn.setOnClickListener {
-                val cmd = inputCommand.text.toString().trim()
-                if (cmd.isNotEmpty()) {
-                    outputText.append("\n$ cmd\n")
-                    try {
-                        if (libraryLoaded) {
-                            val result = executeCommand(cmd)
-                            outputText.append(result)
-                        } else {
-                            outputText.append("Error: Native bridge unavailable.\n")
-                        }
-                    } catch (t: Throwable) {
-                        outputText.append("Runtime Error: ${t.message}\n")
-                    }
-                    inputCommand.text.clear()
-                    scroll?.post {
-                        scroll.fullScroll(ScrollView.FOCUS_DOWN)
-                    }
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e("NeoTerminal", "Fatal crash during onCreate: ${t.message}")
-        }
-    }
+super.onCreate(savedInstanceState)
+setContentView(R.layout.activity_main)
+val outputText = findViewById<TextView>(R.id.terminalOutput)
+val inputCommand = findViewById<EditText>(R.id.inputCommand)
+val runBtn = findViewById<Button>(R.id.runButton)
+try {
+System.loadLibrary("neoterminal_native")
+isNativeLoaded = true
+outputText.text = "NeoTerminal Started.\nSystem Ready.\n"
+} catch (e: Throwable) {
+outputText.text = "Error Loading C++ Library: ${e.message}\n"
+}
+runBtn.setOnClickListener {
+val cmd = inputCommand.text.toString()
+if (cmd.isNotEmpty()) {
+outputText.append("\n$ $cmd\n")
+if (isNativeLoaded) {
+try {
+outputText.append(executeCommand(cmd))
+} catch (e: Exception) {
+outputText.append("Error: ${e.message}\n")
+}
+}
+inputCommand.text.clear()
+}
+}
+}
 }
