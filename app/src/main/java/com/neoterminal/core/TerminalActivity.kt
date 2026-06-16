@@ -6,9 +6,9 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.ScrollView
 import android.util.Log
-import android.app.Activity
+import androidx.appcompat.app.AppCompatActivity
 
-class TerminalActivity : Activity() {
+class TerminalActivity : AppCompatActivity() {
     private var libraryLoaded = false
     private external fun executeCommand(command: String): String
 
@@ -23,7 +23,7 @@ class TerminalActivity : Activity() {
             val runBtn = findViewById<Button>(R.id.runButton)
             val scroll = findViewById<ScrollView>(R.id.terminalScroll)
 
-            // Load library safely inside onCreate
+            // Load library safely inside onCreate to prevent static block crashes
             try {
                 System.loadLibrary("neoterminal_native")
                 libraryLoaded = true
