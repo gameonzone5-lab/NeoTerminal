@@ -9,12 +9,15 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_neoterminal_core_TerminalActivity_executeCommand(JNIEnv* env, jobject /* this */, jstring command) {
     const char *cmd_str = env->GetStringUTFChars(command, nullptr);
 
-    // 1. Setup Termux-like Environment (App's private storage as HOME)
+    // 1. Setup Environment Variables
     std::string home_dir = "/data/data/com.neoterminal.core/files";
     setenv("HOME", home_dir.c_str(), 1);
+
+    // CRITICAL FIX: EXPLICITLY SET SYSTEM PATH SO COMMANDS LIKE 'ls', 'ping', 'top' ARE FOUND
+    setenv("PATH", "/sbin:/system/sbin:/system/bin:/system/xbin:/vendor/bin:/vendor/xbin", 1);
     chdir(home_dir.c_str());
 
-    // 2. Append ' 2>&1' to capture standard error alongside standard output
+    // 2. Append ' 2>&1' to capture stderr alongside stdout
     std::string full_cmd = std::string(cmd_str) + " 2>&1";
     char buffer[256];
     std::string result = "";
