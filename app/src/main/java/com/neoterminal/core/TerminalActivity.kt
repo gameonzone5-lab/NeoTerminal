@@ -12,6 +12,11 @@ class TerminalActivity : Activity() {
     private lateinit var inputCommand: EditText
     private lateinit var runBtn: Button
 
+    // Termux Architecture Variables
+    private lateinit var prefixDir: File
+    private lateinit var binDir: File
+    private lateinit var libDir: File
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val rootLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(android.graphics.Color.BLACK) }
@@ -22,22 +27,30 @@ class TerminalActivity : Activity() {
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        // CLEANUP: Remove the incompatible SECCOMP-violating payload
-        val badBusybox = File(filesDir, "busybox")
-        if (badBusybox.exists()) badBusybox.delete()
-        val badUbuntu = File(filesDir, "ubuntu.sh")
-        if (badUbuntu.exists()) badUbuntu.delete()
+        setupTermuxEnvironment()
 
         runBtn.setOnClickListener {
-            val rawCmd = inputCommand.text.toString()
-            val cmd = rawCmd.trim()
-
+            val cmd = inputCommand.text.toString().trim()
             if (cmd.isNotEmpty()) {
                 runShellCommandLive(cmd)
             }
             inputCommand.text.clear()
         }
-        outputText.text = "[*] NeoTerm Pro Active (Pure Native Engine).\n[*] Incompatible payloads removed. Try 'ls /system/bin' or 'ping google.com'.\n"
+
+        outputText.text = "[*] NeoTerm Pro Active (Termux NDK Architecture).\n[*] PREFIX: ${prefixDir.absolutePath}\n[*] Ready for Bionic Android binaries. Try 'ls /sdcard' or 'pwd'.\n"
+    }
+
+    private fun setupTermuxEnvironment() {
+        // Create exact Termux folder structure
+        prefixDir = File(filesDir, "usr")
+        binDir = File(prefixDir, "bin")
+        libDir = File(prefixDir, "lib")
+        val tmpDir = File(prefixDir, "tmp")
+
+        if (!prefixDir.exists()) prefixDir.mkdirs()
+        if (!binDir.exists()) binDir.mkdirs()
+        if (!libDir.exists()) libDir.mkdirs()
+        if (!tmpDir.exists()) tmpDir.mkdirs()
     }
 
     private fun runShellCommandLive(cmd: String) {
@@ -46,16 +59,26 @@ class TerminalActivity : Activity() {
 
         thread {
             try {
-                // Execute using pure native Android shell and binaries
-                val process = ProcessBuilder("sh", "-c", "export PATH=/sbin:/system/sbin:/system/bin:/system/xbin:/vendor/bin:/vendor/xbin; $cmd")
-                    .redirectErrorStream(true)
-                    .directory(filesDir)
-                    .start()
+                // Setup identical environment to Termux
+                val envList = mutableListOf(
+                    "PATH=${binDir.absolutePath}:/sbin:/system/sbin:/system/bin:/system/xbin:/vendor/bin:/vendor/xbin",
+                    "PREFIX=${prefixDir.absolutePath}",
+                    "LD_LIBRARY_PATH=${libDir.absolutePath}",
+                    "TMPDIR=${File(prefixDir, "tmp").absolutePath}",
+                    "HOME=${filesDir.absolutePath}",
+                    "TERM=xterm-256color"
+                )
+
+                // Execute process with custom Termux environment
+                val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd), envList.toTypedArray(), filesDir)
 
                 val reader = process.inputStream.bufferedReader()
+                val errorReader = process.errorStream.bufferedReader()
+
                 var line: String?
                 var lineCount = 0
 
+                // Read stdout
                 while (reader.readLine().also { line = it } != null) {
                     val safeLine = line ?: ""
                     runOnUiThread {
@@ -63,12 +86,18 @@ class TerminalActivity : Activity() {
                         scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                     }
                     lineCount++
-                    if (lineCount > 2000) {
-                        runOnUiThread { outputText.append("\n[!] Output truncated to prevent crash.\n") }
-                        process.destroy()
-                        break
+                    if (lineCount > 2000) { process.destroy(); break }
+                }
+
+                // Read stderr (errors)
+                while (errorReader.readLine().also { line = it } != null) {
+                    val safeLine = line ?: ""
+                    runOnUiThread {
+                        outputText.append(safeLine + "\n")
+                        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                     }
                 }
+
                 process.waitFor()
                 runOnUiThread { runBtn.isEnabled = true }
             } catch (e: Exception) {
