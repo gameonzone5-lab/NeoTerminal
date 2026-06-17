@@ -35,7 +35,7 @@ class TerminalActivity : Activity() {
         if (!aptFile.exists()) {
             outputText.append("[!] Rootfs empty. Type 'hack' to build system.\n")
         } else {
-            outputText.append("[+] Rootfs Secure. Ready for commands.\n")
+            outputText.append("[+] Rootfs Secure. Ready for commands. Try 'apt update'.\n")
         }
 
         runBtn.setOnClickListener {
@@ -59,8 +59,14 @@ class TerminalActivity : Activity() {
             try {
                 val prootFile = File(filesDir, "proot")
                 val rootfs = File(filesDir, "rootfs")
+
+                // Guest paths (Fake World)
                 val homeDir = "/data/data/com.termux/files/home"
-                val tmpDir = "/data/data/com.termux/files/usr/tmp"
+                val guestTmpDir = "/data/data/com.termux/files/usr/tmp"
+
+                // Host path (Real World - CRITICAL FIX FOR GLUE ROOTFS)
+                val hostTmpDir = File(filesDir, "proot_host_tmp")
+                if (!hostTmpDir.exists()) hostTmpDir.mkdirs()
 
                 val envList = mutableListOf(
                     "PATH=/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin",
@@ -68,16 +74,14 @@ class TerminalActivity : Activity() {
                     "LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib",
                     "HOME=$homeDir",
                     "TERM=xterm-256color",
-                    "TMPDIR=$tmpDir",
-                    "PROOT_TMP_DIR=$tmpDir",
+                    "TMPDIR=$guestTmpDir", // For Linux tools inside chroot
+                    "PROOT_TMP_DIR=${hostTmpDir.absolutePath}", // For PRoot engine itself
                     "PROOT_NO_SECCOMP=1"
                 )
 
                 val bashPath = "/data/data/com.termux/files/usr/bin/bash"
-                val shPath = "/data/data/com.termux/files/usr/bin/sh"
 
                 val finalCmdArray = if (prootFile.exists() && File(rootfs, bashPath).exists()) {
-                    // USERLAND CHROOT METHOD: PRoot sets rootfs as `/`, binds Android's /system for linker64
                     arrayOf(
                         prootFile.absolutePath,
                         "-r", rootfs.absolutePath,
@@ -118,7 +122,6 @@ class TerminalActivity : Activity() {
         outputText.append("\n[*] INITIATING USERLAND ROOTFS DEPLOYMENT...\n")
         thread {
             try {
-                // Create exact physical path inside rootfs
                 val rootfs = File(filesDir, "rootfs")
                 if (rootfs.exists()) rootfs.deleteRecursively()
                 rootfs.mkdirs()
@@ -188,7 +191,7 @@ class TerminalActivity : Activity() {
 
                 runOnUiThread {
                     outputText.append("\n[+] USERLAND ROOTFS BUILT SUCCESSFULLY! 🎉\n")
-                    outputText.append("[+] Chroot bypass active. Try 'apt update'.\n")
+                    outputText.append("[+] Chroot bypass active. Engine is primed.\n")
                     runBtn.isEnabled = true
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
