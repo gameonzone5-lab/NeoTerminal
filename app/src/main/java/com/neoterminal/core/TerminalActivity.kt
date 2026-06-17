@@ -9,9 +9,6 @@ import java.io.File
 class TerminalActivity : Activity() {
     private external fun executeCommand(command: String): String
     private var isNativeLoaded = false
-    private lateinit var outputText: TextView
-    private lateinit var scrollView: ScrollView
-    private lateinit var inputCommand: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -20,22 +17,22 @@ class TerminalActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK) 
         }
-        scrollView = ScrollView(this).apply { 
+        val scrollView = ScrollView(this).apply { 
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f) 
         }
-        outputText = TextView(this).apply { 
+        val outputText = TextView(this).apply { 
             setTextColor(Color.GREEN)
             textSize = 14f
             setPadding(16, 16, 16, 16) 
         }
         scrollView.addView(outputText)
 
-        inputCommand = EditText(this).apply {
+        val inputCommand = EditText(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             setTextColor(Color.BLACK)
             setBackgroundColor(Color.LTGRAY)
             setHintTextColor(Color.GRAY)
-            hint = "Enter command (e.g. ls /sdcard)..."
+            hint = "Enter native command (e.g., ls /system/bin)..."
         }
 
         val runBtn = Button(this).apply { text = "RUN" }
@@ -44,7 +41,7 @@ class TerminalActivity : Activity() {
         rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        // Delete broken busybox to stop SECCOMP crashes
+        // CLEANUP: Delete the broken busybox payload causing Bad System Call
         val busyboxFile = File(filesDir, "busybox")
         if (busyboxFile.exists()) {
             busyboxFile.delete()
@@ -53,7 +50,7 @@ class TerminalActivity : Activity() {
         try {
             System.loadLibrary("neoterminal_native")
             isNativeLoaded = true
-            outputText.text = "[*] ULTIMATE NEO TERMINAL READY.\n[*] Native Android PATH loaded successfully.\n"
+            outputText.text = "[*] NEO TERMINAL ACTIVE.\n[+] Native Shell Restored. Try 'ls /sdcard' or 'top'.\n"
         } catch (e: Throwable) {
             outputText.text = "[-] Native Error: ${e.message}\n"
         }

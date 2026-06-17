@@ -9,20 +9,21 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_neoterminal_core_TerminalActivity_executeCommand(JNIEnv* env, jobject /* this */, jstring command) {
     const char *cmd_str = env->GetStringUTFChars(command, nullptr);
 
-    // 1. Setup Perfect Android Environment
+    // Setup Perfect Android Environment
     std::string home_dir = "/data/data/com.neoterminal.core/files";
     setenv("HOME", home_dir.c_str(), 1);
+    // Explicitly set PATH to Android's native bin directories
     setenv("PATH", "/sbin:/system/sbin:/system/bin:/system/xbin:/vendor/bin:/vendor/xbin", 1);
     chdir(home_dir.c_str());
 
-    // 2. Intercept 'apt' commands to give a clear explanation
     std::string input_cmd(cmd_str);
+
+    // Intercept apt/pkg commands
     if (input_cmd.rfind("apt", 0) == 0 || input_cmd.rfind("pkg", 0) == 0) {
         env->ReleaseStringUTFChars(command, cmd_str);
-        return env->NewStringUTF("NeoTerminal uses the Native Android Shell.\nPackage managers like 'apt' or 'pkg' require a PRoot environment and are not supported here.\nTry native commands like: ls, pwd, top, logcat, ping.\n");
+        return env->NewStringUTF("[-] apt/pkg is not supported in native shell mode. Try: ls, pwd, top, logcat.\n");
     }
 
-    // 3. Execute Command safely
     std::string full_cmd = input_cmd + " 2>&1";
     char buffer[256];
     std::string result = "";
