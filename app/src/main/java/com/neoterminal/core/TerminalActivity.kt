@@ -4,8 +4,10 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.*
-import android.Manifest
-import android.content.pm.PackageManager
+import java.io.File
+import java.io.FileOutputStream
+import java.net.URL
+import kotlin.concurrent.thread
 
 class TerminalActivity : Activity() {
     private external fun executeCommand(command: String): String
@@ -16,15 +18,16 @@ class TerminalActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        
         val rootLayout = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK) 
         }
-
+        
         scrollView = ScrollView(this).apply { 
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f) 
         }
+        
         outputText = TextView(this).apply { 
             setTextColor(Color.GREEN)
             textSize = 14f
@@ -36,8 +39,8 @@ class TerminalActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             setTextColor(Color.BLACK)
             setBackgroundColor(Color.LTGRAY)
-            setHintTextColor(Color.DKGRAY)
-            hint = "Try 'ls /sdcard' or 'ping google.com'..."
+            setHintTextColor(Color.GRAY)
+            hint = "Enter command..."
         }
 
         val runBtn = Button(this).apply { text = "RUN" }
@@ -46,32 +49,61 @@ class TerminalActivity : Activity() {
         rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        // Request Storage Permission
-        if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE), 1)
-        }
-
-        try {
+        try { 
             System.loadLibrary("neoterminal_native")
-            isNativeLoaded = true
-            outputText.text = "[*] NEO TERMINAL PRO ACTIVE.\n[+] Auto-Toybox Engine Enabled. Storage Access Requested.\n"
-        } catch (e: Throwable) {
-            outputText.text = "[-] Native Error: ${e.message}\n"
+            isNativeLoaded = true 
+        } catch (e: Exception) {
+            // Library load failure handled silently or via outputText
         }
 
         runBtn.setOnClickListener {
-            val cmd = inputCommand.text.toString()
+            val cmd = inputCommand.text.toString().trim()
             if (cmd.isNotEmpty()) {
-                outputText.append("\nroot@android:~# $cmd\n")
-                if (isNativeLoaded) {
-                    try {
-                        outputText.append(executeCommand(cmd))
-                    } catch (e: Exception) {
-                        outputText.append("[-] Error: ${e.message}\n")
+                if (cmd == "bootstrap") {
+                    startBootstrap()
+                } else if (isNativeLoaded) {
+                    outputText.append("\n$ $cmd\n")
+                    try { 
+                        outputText.append(executeCommand(cmd)) 
+                    } catch (e: Exception) { 
+                        outputText.append("Error: ${e.message}\n") 
                     }
+                } else {
+                    outputText.append("Native bridge not loaded.\n")
                 }
                 inputCommand.text.clear()
                 scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+            }
+        }
+
+        outputText.text = "[*] NeoTerm Pro Ready.\nType 'bootstrap' to start Linux environment installation.\n"
+    }
+
+    private fun startBootstrap() {
+        outputText.append("[*] Initializing Linux environment (PRoot)...\n")
+        thread {
+            try {
+                val prootDir = File(filesDir, "proot_env")
+                if (!prootDir.exists()) prootDir.mkdirs()
+                
+                // Download PRoot binary
+                val url = URL("https://proot.gitlab.io/proot/bin/proot-x86_64") 
+                val prootFile = File(prootDir, "proot")
+                
+                url.openStream().use { input -> 
+                    FileOutputStream(prootFile).use { output -> 
+                        input.copyTo(output) 
+                    } 
+                }
+                prootFile.setExecutable(true, false)
+
+                runOnUiThread { 
+                    outputText.append("[+] PRoot binary ready. Environment structure created.\n") 
+                }
+            } catch (e: Exception) {
+                runOnUiThread { 
+                    outputText.append("[-] Bootstrap failed: ${e.message}\n") 
+                }
             }
         }
     }
