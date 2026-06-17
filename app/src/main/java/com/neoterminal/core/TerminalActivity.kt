@@ -4,6 +4,9 @@ import android.app.Activity
 import android.os.Bundle
 import android.widget.*
 import java.io.File
+import java.io.FileOutputStream
+import java.net.URL
+import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
 
 class TerminalActivity : Activity() {
@@ -12,7 +15,6 @@ class TerminalActivity : Activity() {
     private lateinit var inputCommand: EditText
     private lateinit var runBtn: Button
 
-    // Termux Architecture Variables
     private lateinit var prefixDir: File
     private lateinit var binDir: File
     private lateinit var libDir: File
@@ -31,17 +33,18 @@ class TerminalActivity : Activity() {
 
         runBtn.setOnClickListener {
             val cmd = inputCommand.text.toString().trim()
-            if (cmd.isNotEmpty()) {
+            if (cmd.lowercase() == "bootstrap") {
+                installTermuxBootstrap()
+            } else if (cmd.isNotEmpty()) {
                 runShellCommandLive(cmd)
             }
             inputCommand.text.clear()
         }
 
-        outputText.text = "[*] NeoTerm Pro Active (Termux NDK Architecture).\n[*] PREFIX: ${prefixDir.absolutePath}\n[*] Ready for Bionic Android binaries. Try 'ls /sdcard' or 'pwd'.\n"
+        outputText.text = "[*] NeoTerm Pro Active (Termux NDK Architecture).\n[*] PREFIX: ${prefixDir.absolutePath}\n[*] Type 'bootstrap' to install APT and Linux core.\n"
     }
 
     private fun setupTermuxEnvironment() {
-        // Create exact Termux folder structure
         prefixDir = File(filesDir, "usr")
         binDir = File(prefixDir, "bin")
         libDir = File(prefixDir, "lib")
@@ -59,7 +62,6 @@ class TerminalActivity : Activity() {
 
         thread {
             try {
-                // Setup identical environment to Termux
                 val envList = mutableListOf(
                     "PATH=${binDir.absolutePath}:/sbin:/system/sbin:/system/bin:/system/xbin:/vendor/bin:/vendor/xbin",
                     "PREFIX=${prefixDir.absolutePath}",
@@ -69,7 +71,6 @@ class TerminalActivity : Activity() {
                     "TERM=xterm-256color"
                 )
 
-                // Execute process with custom Termux environment
                 val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd), envList.toTypedArray(), filesDir)
 
                 val reader = process.inputStream.bufferedReader()
@@ -105,6 +106,51 @@ class TerminalActivity : Activity() {
                     outputText.append("[-] Engine Error: ${e.message}\n")
                     runBtn.isEnabled = true
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+                }
+            }
+        }
+    }
+
+    private fun installTermuxBootstrap() {
+        runBtn.isEnabled = false
+        outputText.append("\n[*] Downloading Official Termux Bootstrap (AARCH64)... Please wait.\n")
+
+        thread {
+            try {
+                // Official Termux Bootstrap URL
+                val url = URL("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip")
+                val zipStream = ZipInputStream(url.openStream())
+                var entry = zipStream.nextEntry
+
+                while (entry != null) {
+                    val file = File(prefixDir, entry.name)
+                    if (entry.isDirectory) {
+                        file.mkdirs()
+                    } else {
+                        file.parentFile?.mkdirs()
+                        FileOutputStream(file).use { output ->
+                            zipStream.copyTo(output)
+                        }
+                    }
+                    zipStream.closeEntry()
+                    entry = zipStream.nextEntry
+                }
+                zipStream.close()
+
+                // Make all binaries executable
+                binDir.listFiles()?.forEach { it.setExecutable(true) }
+
+                runOnUiThread {
+                    outputText.append("[+] Termux Core Installed Successfully! 🎉\n")
+                    outputText.append("[+] APT package manager is now ready.\n")
+                    outputText.append("[+] Try command: 'apt update' or 'ls /data/data/com.neoterminal.core/files/usr/bin'\n")
+                    runBtn.isEnabled = true
+                    scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    outputText.append("[-] Extraction Error: ${e.message}\n")
+                    runBtn.isEnabled = true
                 }
             }
         }
