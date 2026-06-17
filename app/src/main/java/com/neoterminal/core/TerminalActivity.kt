@@ -4,11 +4,17 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.*
-import java.io.File
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class TerminalActivity : Activity() {
     private external fun executeCommand(command: String): String
     private var isNativeLoaded = false
+    private lateinit var outputText: TextView
+    private lateinit var scrollView: ScrollView
+    private lateinit var inputCommand: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -17,22 +23,23 @@ class TerminalActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK) 
         }
-        val scrollView = ScrollView(this).apply { 
+
+        scrollView = ScrollView(this).apply { 
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f) 
         }
-        val outputText = TextView(this).apply { 
+        outputText = TextView(this).apply { 
             setTextColor(Color.GREEN)
             textSize = 14f
             setPadding(16, 16, 16, 16) 
         }
         scrollView.addView(outputText)
 
-        val inputCommand = EditText(this).apply {
+        inputCommand = EditText(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             setTextColor(Color.BLACK)
             setBackgroundColor(Color.LTGRAY)
             setHintTextColor(Color.GRAY)
-            hint = "Enter native command (e.g., ls /system/bin)..."
+            hint = "Enter command (e.g. ls /sdcard)..."
         }
 
         val runBtn = Button(this).apply { text = "RUN" }
@@ -41,16 +48,15 @@ class TerminalActivity : Activity() {
         rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        // CLEANUP: Delete the broken busybox payload causing Bad System Call
-        val busyboxFile = File(filesDir, "busybox")
-        if (busyboxFile.exists()) {
-            busyboxFile.delete()
+        // Request Storage Permissions
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE), 101)
         }
 
         try {
             System.loadLibrary("neoterminal_native")
             isNativeLoaded = true
-            outputText.text = "[*] NEO TERMINAL ACTIVE.\n[+] Native Shell Restored. Try 'ls /sdcard' or 'top'.\n"
+            outputText.text = "[*] NEO TERMINAL ACTIVE.\n[+] Toybox Wrapper Enabled.\n"
         } catch (e: Throwable) {
             outputText.text = "[-] Native Error: ${e.message}\n"
         }
