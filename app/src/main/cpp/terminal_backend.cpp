@@ -1,35 +1,45 @@
 #include <jni.h>
 #include <string>
-#include <cstdio>
-#include <iostream>
-#include <vector>
+#include <stdexcept>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_neoterminal_core_TerminalActivity_executeCommand(JNIEnv* env, jobject thiz, jstring command) {
-    if (command == nullptr) {
-        return env->NewStringUTF("Error: Null command");
-    }
+Java_com_neoterminal_core_TerminalActivity_executeCommand(JNIEnv* env, jobject /* this */, jstring command) {
+    const char *cmd_str = env->GetStringUTFChars(command, nullptr);
 
-    const char* nativeCommand = env->GetStringUTFChars(command, nullptr);
-    
-    // Using popen to execute the command in the android shell
-    FILE* pipe = popen(nativeCommand, "r");
-    if (!pipe) {
-        env->ReleaseStringUTFChars(command, nativeCommand);
-        return env->NewStringUTF("Error: popen() failed to execute command.");
-    }
+    // 1. Setup Termux-like Environment (App's private storage as HOME)
+    std::string home_dir = "/data/data/com.neoterminal.core/files";
+    setenv("HOME", home_dir.c_str(), 1);
+    chdir(home_dir.c_str());
 
-    char buffer[128];
+    // 2. Append ' 2>&1' to capture standard error alongside standard output
+    std::string full_cmd = std::string(cmd_str) + " 2>&1";
+    char buffer[256];
     std::string result = "";
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        result += buffer;
+
+    FILE* pipe = popen(full_cmd.c_str(), "r");
+    if (!pipe) {
+        env->ReleaseStringUTFChars(command, cmd_str);
+        return env->NewStringUTF("Backend Error: popen() failed!\n");
+    }
+
+    try {
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            result += buffer;
+        }
+    } catch (...) {
+        pclose(pipe);
+        env->ReleaseStringUTFChars(command, cmd_str);
+        return env->NewStringUTF("Backend Error: Execution interrupted!\n");
     }
 
     pclose(pipe);
-    env->ReleaseStringUTFChars(command, nativeCommand);
+    env->ReleaseStringUTFChars(command, cmd_str);
 
     if (result.empty()) {
-        return env->NewStringUTF("Command executed (no output).\n");
+        return env->NewStringUTF("\n");
     }
 
     return env->NewStringUTF(result.c_str());
