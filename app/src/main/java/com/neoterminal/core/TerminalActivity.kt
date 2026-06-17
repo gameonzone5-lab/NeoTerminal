@@ -1,10 +1,9 @@
 package com.neoterminal.core
 import android.app.Activity
-import android.graphics.Color
 import android.os.Bundle
-import android.view.ViewGroup
 import android.widget.*
 import java.io.File
+import java.io.FileOutputStream
 import java.net.URL
 import kotlin.concurrent.thread
 
@@ -14,30 +13,25 @@ class TerminalActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         val rootLayout = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK) 
+            setBackgroundColor(android.graphics.Color.BLACK) 
         }
-        
         outputText = TextView(this).apply { 
-            setTextColor(Color.GREEN)
+            setTextColor(android.graphics.Color.GREEN)
             textSize = 14f
             setPadding(16, 16, 16, 16) 
         }
-        
         val scrollView = ScrollView(this).apply { 
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f) 
             addView(outputText)
+            layoutParams = LinearLayout.LayoutParams(-1, 0, 1f) 
         }
-        
         val input = EditText(this).apply { 
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             hint = "Command..."
-            setTextColor(Color.BLACK)
-            setBackgroundColor(Color.LTGRAY)
+            setTextColor(android.graphics.Color.BLACK)
+            setBackgroundColor(android.graphics.Color.LTGRAY)
         }
-        
         val runBtn = Button(this).apply { text = "RUN" }
         
         rootLayout.addView(scrollView)
@@ -46,7 +40,7 @@ class TerminalActivity : Activity() {
         setContentView(rootLayout)
 
         runBtn.setOnClickListener {
-            val cmd = input.text.toString().trim()
+            val cmd = input.text.toString()
             if (cmd == "bootstrap") {
                 downloadScript()
             } else if (cmd.startsWith("sh ubuntu.sh")) {
@@ -69,7 +63,6 @@ class TerminalActivity : Activity() {
             input.text.clear()
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
-        
         outputText.text = "NeoTerm Pro Active. \nCommands: 'bootstrap', 'sh ubuntu.sh', 'ls /sdcard'.\n"
     }
 
