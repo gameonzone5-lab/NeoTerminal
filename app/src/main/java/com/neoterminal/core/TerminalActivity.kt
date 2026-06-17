@@ -25,29 +25,36 @@ class TerminalActivity : Activity() {
         setContentView(rootLayout)
 
         runBtn.setOnClickListener {
-            val cmd = inputCommand.text.toString()
-            if (cmd == "bootstrap") {
-                downloadScript()
+            // CRITICAL FIX: Trim spaces and handle formatting
+            val rawCmd = inputCommand.text.toString()
+            val cmd = rawCmd.trim()
+            val cmdLower = cmd.lowercase()
+
+            if (cmdLower == "bootstrap") {
+                installCoreEngine()
             } else if (cmd.isNotEmpty()) {
                 runShellCommandLive(cmd)
             }
             inputCommand.text.clear()
         }
-        outputText.text = "[*] NeoTerm Pro Active (Kotlin Safe Engine).\n[*] C++ JNI Removed. Crash Protection Enabled.\nCommands: 'bootstrap', 'sh ubuntu.sh', 'ls /sdcard'.\n"
+        outputText.text = "[*] NeoTerm Pro Active (Kotlin Engine).\n[*] Commands: 'bootstrap', 'ls /sdcard'.\n"
     }
 
     private fun runShellCommandLive(cmd: String) {
-        val finalCmd = if (cmd.startsWith("sh ubuntu.sh")) {
-            "sh " + File(filesDir, "ubuntu.sh").absolutePath
-        } else cmd
-
-        outputText.append("\n$ $finalCmd\n")
         runBtn.isEnabled = false
+        outputText.append("\n$ $cmd\n")
 
         thread {
             try {
-                // Pure Kotlin ProcessBuilder ensures 100% safe execution
-                val process = ProcessBuilder("sh", "-c", "export ARCH=aarch64; export PATH=/system/bin:/system/xbin:/vendor/bin; $finalCmd")
+                val busyboxFile = File(filesDir, "busybox")
+                // If BusyBox is installed, use its shell to run commands so we get 300+ linux tools natively
+                val finalCmd = if (busyboxFile.exists()) {
+                    "${busyboxFile.absolutePath} sh -c '$cmd'"
+                } else {
+                    cmd
+                }
+
+                val process = ProcessBuilder("sh", "-c", "export ARCH=aarch64; export PATH=${filesDir.absolutePath}:/system/bin:/system/xbin:/vendor/bin; $finalCmd")
                     .redirectErrorStream(true)
                     .directory(filesDir)
                     .start()
@@ -56,7 +63,6 @@ class TerminalActivity : Activity() {
                 var line: String?
                 var lineCount = 0
 
-                // Read line by line to prevent OOM and UI freezing
                 while (reader.readLine().also { line = it } != null) {
                     val safeLine = line ?: ""
                     runOnUiThread {
@@ -64,15 +70,13 @@ class TerminalActivity : Activity() {
                         scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                     }
                     lineCount++
-                    // Kill switch if output goes infinite
                     if (lineCount > 2000) {
-                        runOnUiThread { outputText.append("\n[!] Output truncated to prevent memory crash.\n") }
+                        runOnUiThread { outputText.append("\n[!] Output truncated to prevent crash.\n") }
                         process.destroy()
                         break
                     }
                 }
                 process.waitFor()
-
                 runOnUiThread { runBtn.isEnabled = true }
             } catch (e: Exception) {
                 runOnUiThread {
@@ -84,17 +88,21 @@ class TerminalActivity : Activity() {
         }
     }
 
-    private fun downloadScript() {
+    private fun installCoreEngine() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] Downloading Ubuntu Installer...\n")
+        outputText.append("\n[*] Installing Core Linux Tools (BusyBox ARM64)...\n")
         thread {
             try {
-                val scriptFile = File(filesDir, "ubuntu.sh")
-                val url = URL("https://raw.githubusercontent.com/EXALAB/AnLinux-Resources/master/Scripts/Installer/Ubuntu/ubuntu.sh")
-                url.openStream().use { input -> FileOutputStream(scriptFile).use { output -> input.copyTo(output) } }
-                scriptFile.setExecutable(true)
+                val busyboxFile = File(filesDir, "busybox")
+                // Official static ARM64 BusyBox URL
+                val url = URL("https://busybox.net/downloads/binaries/1.35.0-aarch64-linux-musl/busybox")
+                url.openStream().use { input -> FileOutputStream(busyboxFile).use { output -> input.copyTo(output) } }
+                busyboxFile.setExecutable(true)
+
                 runOnUiThread {
-                    outputText.append("[+] Saved to: ${scriptFile.absolutePath}\n[+] Now type 'sh ubuntu.sh' to execute.\n")
+                    outputText.append("[+] Linux Core Installed Successfully!\n")
+                    outputText.append("[+] You now have 300+ native commands (wget, tar, dpkg, awk, etc).\n")
+                    outputText.append("[+] Try commands like: 'wget google.com' or 'ls -la'\n")
                     runBtn.isEnabled = true
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
