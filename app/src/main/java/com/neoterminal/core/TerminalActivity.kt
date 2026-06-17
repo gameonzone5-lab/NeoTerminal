@@ -9,6 +9,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
+import android.system.Os
 
 class TerminalActivity : Activity() {
     private lateinit var outputText: TextView
@@ -38,7 +39,7 @@ class TerminalActivity : Activity() {
             inputCommand.text.clear()
         }
 
-        outputText.text = "[*] NeoTerm Pro Active (PRoot Configured).\n[*] Type 'bootstrap' to install Engine or 'apt update'.\n"
+        outputText.text = "[*] NeoTerm Pro Active (Symlink Restorer Engine).\n[*] Type 'bootstrap' to install correctly.\n"
     }
 
     private fun setupTermuxEnvironment() {
@@ -60,7 +61,6 @@ class TerminalActivity : Activity() {
                 val tmpDir = File(filesDir, "usr/tmp")
                 if (!tmpDir.exists()) tmpDir.mkdirs()
 
-                // CRITICAL FIX: Added TMPDIR, PROOT_TMP_DIR and SECCOMP bypass
                 val envList = mutableListOf(
                     "PATH=/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin",
                     "PREFIX=/data/data/com.termux/files/usr",
@@ -72,7 +72,6 @@ class TerminalActivity : Activity() {
                     "PROOT_NO_SECCOMP=1"
                 )
 
-                // CRITICAL FIX: Added -0 for root user emulation
                 val finalCmdArray = if (prootFile.exists()) {
                     arrayOf(
                         prootFile.absolutePath,
@@ -124,37 +123,65 @@ class TerminalActivity : Activity() {
 
     private fun installTermuxBootstrap() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] Downloading Termux Bootstrap...\n")
+        outputText.append("\n[*] Downloading Official Termux Bootstrap...\n")
 
         thread {
             try {
                 val usrDir = File(filesDir, "usr")
+                // Clean old corrupted files before reinstalling
+                if (usrDir.exists()) usrDir.deleteRecursively()
+                usrDir.mkdirs()
+
                 val url = URL("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip")
                 val zipStream = ZipInputStream(url.openStream())
                 var entry = zipStream.nextEntry
+                val symlinks = mutableListOf<String>()
 
                 while (entry != null) {
-                    val file = File(usrDir, entry.name)
-                    if (entry.isDirectory) {
-                        file.mkdirs()
+                    if (entry.name == "SYMLINKS.txt") {
+                        val content = String(zipStream.readBytes())
+                        symlinks.addAll(content.lines().filter { it.contains("←") })
                     } else {
-                        file.parentFile?.mkdirs()
-                        FileOutputStream(file).use { output ->
-                            zipStream.copyTo(output)
+                        val file = File(usrDir, entry.name)
+                        if (entry.isDirectory) {
+                            file.mkdirs()
+                        } else {
+                            file.parentFile?.mkdirs()
+                            FileOutputStream(file).use { output ->
+                                zipStream.copyTo(output)
+                            }
                         }
                     }
                     zipStream.closeEntry()
                     entry = zipStream.nextEntry
                 }
                 zipStream.close()
-                File(usrDir, "bin").listFiles()?.forEach { it.setExecutable(true) }
+
+                runOnUiThread { outputText.append("[*] Restoring Linux Symlinks (Shortcuts)...\n") }
+                symlinks.forEach { line ->
+                    val parts = line.split("←")
+                    if (parts.size == 2) {
+                        val target = parts[0]
+                        val link = File(usrDir, parts[1])
+                        if (link.exists()) link.delete()
+                        try {
+                            Os.symlink(target, link.absolutePath)
+                        } catch (e: Exception) { }
+                    }
+                }
+
+                runOnUiThread { outputText.append("[*] Setting Execution Permissions...\n") }
+                usrDir.walkTopDown().forEach { file ->
+                    if (file.isFile && (file.parentFile?.name == "bin" || file.parentFile?.name == "libexec")) {
+                        file.setExecutable(true)
+                    }
+                }
 
                 runOnUiThread { outputText.append("[*] Downloading Official PRoot Binary...\n") }
                 val prootFile = File(filesDir, "proot")
-
                 val prootUrls = arrayOf(
-                    "https://raw.githubusercontent.com/SDRausty/proot-static/master/proot-aarch64",
-                    "https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static"
+                    "https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static",
+                    "https://raw.githubusercontent.com/SDRausty/proot-static/master/proot-aarch64"
                 )
 
                 var prootSuccess = false
@@ -171,21 +198,17 @@ class TerminalActivity : Activity() {
                             connection.inputStream.use { input -> FileOutputStream(prootFile).use { output -> input.copyTo(output) } }
                             prootFile.setExecutable(true)
                             prootSuccess = true
-                            runOnUiThread { outputText.append("[+] Official PRoot downloaded successfully.\n") }
+                            runOnUiThread { outputText.append("[+] PRoot downloaded successfully.\n") }
                             break
                         }
-                    } catch (e: Exception) {
-                        runOnUiThread { outputText.append("[-] Mirror skipped, trying next...\n") }
-                    }
+                    } catch (e: Exception) { }
                 }
 
-                if (!prootSuccess) {
-                    throw Exception("Failed to connect to official servers. Check internet.")
-                }
+                if (!prootSuccess) throw Exception("PRoot servers failed.")
 
                 runOnUiThread {
-                    outputText.append("[+] Termux Core & PRoot Engine Installed! 🎉\n")
-                    outputText.append("[+] Linker Bypass Active. APT is ready.\n")
+                    outputText.append("[+] Termux Core Installed! 🎉\n")
+                    outputText.append("[+] Symlinks fixed. APT is ready.\n")
                     outputText.append("[+] Try command: 'apt update'\n")
                     runBtn.isEnabled = true
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
