@@ -1,8 +1,6 @@
 package com.neoterminal.core
 import android.app.Activity
-import android.graphics.Color
 import android.os.Bundle
-import android.view.ViewGroup
 import android.widget.*
 import java.io.File
 import java.io.FileOutputStream
@@ -21,10 +19,10 @@ class TerminalActivity : Activity() {
 
         val rootLayout = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK) 
+            setBackgroundColor(android.graphics.Color.BLACK) 
         }
         outputText = TextView(this).apply { 
-            setTextColor(Color.GREEN)
+            setTextColor(android.graphics.Color.GREEN)
             textSize = 14f
             setPadding(16, 16, 16, 16) 
         }
@@ -34,11 +32,11 @@ class TerminalActivity : Activity() {
         }
         inputCommand = EditText(this).apply { 
             hint = "Command..."
-            setTextColor(Color.BLACK)
-            setBackgroundColor(Color.LTGRAY)
+            setTextColor(android.graphics.Color.BLACK)
+            setBackgroundColor(android.graphics.Color.LTGRAY) 
         }
         runBtn = Button(this).apply { text = "RUN" }
-
+        
         rootLayout.addView(scrollView)
         rootLayout.addView(inputCommand)
         rootLayout.addView(runBtn)
@@ -63,9 +61,8 @@ class TerminalActivity : Activity() {
             cmd
         }
         outputText.append("\n$ $finalCmd\n[*] Executing in background... Please wait.\n")
-        runBtn.isEnabled = false // Disable button to prevent spamming
+        runBtn.isEnabled = false 
 
-        // CRITICAL FIX: Run long commands in a background thread to prevent ANR
         thread {
             try {
                 val result = executeCommand(finalCmd)
