@@ -28,7 +28,6 @@ hint = "Enter linux command..."
 val runBtn = Button(this).apply { text = "RUN" }
 rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
 setContentView(rootLayout)
-
 try {
 System.loadLibrary("neoterminal_native")
 isNativeLoaded = true
@@ -36,7 +35,6 @@ outputText.text = "[*] NEO TERMINAL INITIALIZED.\n"
 } catch (e: Throwable) {
 outputText.text = "[-] Native Error: ${e.message}\n"
 }
-// AUTOMATICALLY INSTALL TOOLS ON STARTUP
 autoInstallTools()
 runBtn.setOnClickListener {
 val cmd = inputCommand.text.toString()
@@ -45,7 +43,6 @@ outputText.append("\nroot@android:~# $cmd\n")
 if (isNativeLoaded) {
 try {
 val busyboxFile = File(filesDir, "busybox")
-// Route command through busybox if available
 val finalCmd = if (busyboxFile.exists() && !cmd.startsWith("./busybox")) "./busybox $cmd" else cmd
 outputText.append(executeCommand(finalCmd))
 } catch (e: Exception) {
@@ -64,10 +61,10 @@ outputText.append("[+] Linux core tools are already installed and ready.\n")
 return
 }
 outputText.append("[*] First boot detected. Downloading Linux core tools. Please wait...\n")
-inputCommand.isEnabled = false // Disable input during download
+inputCommand.isEnabled = false
 thread {
 try {
-val url = URL("https://busybox.net/downloads/binaries/1.31.1-defconfig-multiarch-musl/busybox-armv8l")
+val url = URL("https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv8l")
 url.openStream().use { input -> FileOutputStream(busyboxFile).use { output -> input.copyTo(output) } }
 busyboxFile.setExecutable(true, false)
 runOnUiThread {
