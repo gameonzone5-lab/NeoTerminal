@@ -38,14 +38,16 @@ class TerminalActivity : Activity() {
             inputCommand.text.clear()
         }
 
-        outputText.text = "[*] NeoTerm Pro Active (Official PRoot Bridge).\n[*] Type 'bootstrap' to install Engine.\n"
+        outputText.text = "[*] NeoTerm Pro Active (PRoot Configured).\n[*] Type 'bootstrap' to install Engine or 'apt update'.\n"
     }
 
     private fun setupTermuxEnvironment() {
         val usrDir = File(filesDir, "usr")
         val homeDir = File(filesDir, "home")
+        val tmpDir = File(usrDir, "tmp")
         if (!usrDir.exists()) usrDir.mkdirs()
         if (!homeDir.exists()) homeDir.mkdirs()
+        if (!tmpDir.exists()) tmpDir.mkdirs()
     }
 
     private fun runShellCommandLive(cmd: String) {
@@ -55,18 +57,26 @@ class TerminalActivity : Activity() {
         thread {
             try {
                 val prootFile = File(filesDir, "proot")
+                val tmpDir = File(filesDir, "usr/tmp")
+                if (!tmpDir.exists()) tmpDir.mkdirs()
 
+                // CRITICAL FIX: Added TMPDIR, PROOT_TMP_DIR and SECCOMP bypass
                 val envList = mutableListOf(
                     "PATH=/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin",
                     "PREFIX=/data/data/com.termux/files/usr",
                     "LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib",
                     "HOME=/data/data/com.termux/files/home",
-                    "TERM=xterm-256color"
+                    "TERM=xterm-256color",
+                    "TMPDIR=${tmpDir.absolutePath}",
+                    "PROOT_TMP_DIR=${tmpDir.absolutePath}",
+                    "PROOT_NO_SECCOMP=1"
                 )
 
+                // CRITICAL FIX: Added -0 for root user emulation
                 val finalCmdArray = if (prootFile.exists()) {
                     arrayOf(
                         prootFile.absolutePath,
+                        "-0",
                         "-b", "${filesDir.absolutePath}:/data/data/com.termux/files",
                         "/data/data/com.termux/files/usr/bin/sh", "-c", cmd
                     )
@@ -118,7 +128,6 @@ class TerminalActivity : Activity() {
 
         thread {
             try {
-                // 1. Download Official Termux Bootstrap
                 val usrDir = File(filesDir, "usr")
                 val url = URL("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip")
                 val zipStream = ZipInputStream(url.openStream())
@@ -140,14 +149,12 @@ class TerminalActivity : Activity() {
                 zipStream.close()
                 File(usrDir, "bin").listFiles()?.forEach { it.setExecutable(true) }
 
-                // 2. Download Official PRoot Binary
                 runOnUiThread { outputText.append("[*] Downloading Official PRoot Binary...\n") }
                 val prootFile = File(filesDir, "proot")
 
-                // 100% Official & Verified URLs for aarch64 PRoot
                 val prootUrls = arrayOf(
-                    "https://raw.githubusercontent.com/SDRausty/proot-static/master/proot-aarch64", // Termux verified static mirror
-                    "https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static" // Official proot-me release
+                    "https://raw.githubusercontent.com/SDRausty/proot-static/master/proot-aarch64",
+                    "https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static"
                 )
 
                 var prootSuccess = false
@@ -187,7 +194,6 @@ class TerminalActivity : Activity() {
                 runOnUiThread {
                     outputText.append("[-] Setup Error: ${e.message}\n")
                     runBtn.isEnabled = true
-                    scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
             }
         }
