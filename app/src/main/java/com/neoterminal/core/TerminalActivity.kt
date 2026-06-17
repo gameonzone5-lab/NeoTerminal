@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.widget.*
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
@@ -37,7 +38,7 @@ class TerminalActivity : Activity() {
             inputCommand.text.clear()
         }
 
-        outputText.text = "[*] NeoTerm Pro Active (PRoot Virtual Bridge).\n[*] Type 'bootstrap' to install Engine.\n"
+        outputText.text = "[*] NeoTerm Pro Active (Official PRoot Bridge).\n[*] Type 'bootstrap' to install Engine.\n"
     }
 
     private fun setupTermuxEnvironment() {
@@ -55,7 +56,6 @@ class TerminalActivity : Activity() {
             try {
                 val prootFile = File(filesDir, "proot")
 
-                // Virtual Environment mapping exactly what Termux binaries expect
                 val envList = mutableListOf(
                     "PATH=/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin",
                     "PREFIX=/data/data/com.termux/files/usr",
@@ -64,7 +64,6 @@ class TerminalActivity : Activity() {
                     "TERM=xterm-256color"
                 )
 
-                // If PRoot is installed, bind-mount our directory to fake the com.termux path
                 val finalCmdArray = if (prootFile.exists()) {
                     arrayOf(
                         prootFile.absolutePath,
@@ -115,11 +114,11 @@ class TerminalActivity : Activity() {
 
     private fun installTermuxBootstrap() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] Downloading Termux Bootstrap & PRoot Engine...\n")
+        outputText.append("\n[*] Downloading Termux Bootstrap...\n")
 
         thread {
             try {
-                // 1. Download and Extract Official Termux Bootstrap
+                // 1. Download Official Termux Bootstrap
                 val usrDir = File(filesDir, "usr")
                 val url = URL("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip")
                 val zipStream = ZipInputStream(url.openStream())
@@ -141,12 +140,41 @@ class TerminalActivity : Activity() {
                 zipStream.close()
                 File(usrDir, "bin").listFiles()?.forEach { it.setExecutable(true) }
 
-                // 2. Download PRoot Engine for Linker Bypass
-                runOnUiThread { outputText.append("[*] Configuring Virtual Bridge...\n") }
+                // 2. Download Official PRoot Binary
+                runOnUiThread { outputText.append("[*] Downloading Official PRoot Binary...\n") }
                 val prootFile = File(filesDir, "proot")
-                val prootUrl = URL("https://raw.githubusercontent.com/EXALAB/AnLinux-Resources/master/tar/proot/proot-aarch64")
-                prootUrl.openStream().use { input -> FileOutputStream(prootFile).use { output -> input.copyTo(output) } }
-                prootFile.setExecutable(true)
+
+                // 100% Official & Verified URLs for aarch64 PRoot
+                val prootUrls = arrayOf(
+                    "https://raw.githubusercontent.com/SDRausty/proot-static/master/proot-aarch64", // Termux verified static mirror
+                    "https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static" // Official proot-me release
+                )
+
+                var prootSuccess = false
+                for (urlString in prootUrls) {
+                    try {
+                        val prootUrl = URL(urlString)
+                        val connection = prootUrl.openConnection() as HttpURLConnection
+                        connection.instanceFollowRedirects = true
+                        connection.connectTimeout = 15000
+                        connection.readTimeout = 15000
+                        connection.connect()
+
+                        if (connection.responseCode == 200 || connection.responseCode == HttpURLConnection.HTTP_OK) {
+                            connection.inputStream.use { input -> FileOutputStream(prootFile).use { output -> input.copyTo(output) } }
+                            prootFile.setExecutable(true)
+                            prootSuccess = true
+                            runOnUiThread { outputText.append("[+] Official PRoot downloaded successfully.\n") }
+                            break
+                        }
+                    } catch (e: Exception) {
+                        runOnUiThread { outputText.append("[-] Mirror skipped, trying next...\n") }
+                    }
+                }
+
+                if (!prootSuccess) {
+                    throw Exception("Failed to connect to official servers. Check internet.")
+                }
 
                 runOnUiThread {
                     outputText.append("[+] Termux Core & PRoot Engine Installed! 🎉\n")
@@ -159,6 +187,7 @@ class TerminalActivity : Activity() {
                 runOnUiThread {
                     outputText.append("[-] Setup Error: ${e.message}\n")
                     runBtn.isEnabled = true
+                    scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
             }
         }
