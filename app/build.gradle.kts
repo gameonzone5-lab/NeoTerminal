@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId = "com.neoterminal.core"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 28
         versionCode = 1
         versionName = "1.0"
 
