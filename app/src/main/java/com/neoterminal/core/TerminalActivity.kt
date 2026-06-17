@@ -53,9 +53,9 @@ class TerminalActivity : Activity() {
         try {
             System.loadLibrary("neoterminal_native")
             isNativeLoaded = true
-            outputText.text = "NeoTerminal Ready.\nNative Android Shell Active.\n"
+            outputText.text = "[*] ULTIMATE NEO TERMINAL READY.\n[*] Native Android PATH loaded successfully.\n"
         } catch (e: Throwable) {
-            outputText.text = "Error: ${e.message}\n"
+            outputText.text = "[-] Native Error: ${e.message}\n"
         }
 
         runBtn.setOnClickListener {
@@ -66,7 +66,7 @@ class TerminalActivity : Activity() {
                     try {
                         outputText.append(executeCommand(cmd))
                     } catch (e: Exception) {
-                        outputText.append("Error: ${e.message}\n")
+                        outputText.append("[-] Error: ${e.message}\n")
                     }
                 }
                 inputCommand.text.clear()
