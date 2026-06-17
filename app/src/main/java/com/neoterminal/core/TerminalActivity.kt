@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.*
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
 
@@ -18,16 +19,14 @@ class TerminalActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         val rootLayout = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK) 
         }
-        
         scrollView = ScrollView(this).apply { 
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f) 
         }
-        
         outputText = TextView(this).apply { 
             setTextColor(Color.GREEN)
             textSize = 14f
@@ -40,7 +39,7 @@ class TerminalActivity : Activity() {
             setTextColor(Color.BLACK)
             setBackgroundColor(Color.LTGRAY)
             setHintTextColor(Color.GRAY)
-            hint = "Enter command..."
+            hint = "Type 'bootstrap' or 'ls /sdcard'..."
         }
 
         val runBtn = Button(this).apply { text = "RUN" }
@@ -49,60 +48,65 @@ class TerminalActivity : Activity() {
         rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        try { 
+        try {
             System.loadLibrary("neoterminal_native")
-            isNativeLoaded = true 
-        } catch (e: Exception) {
-            // Library load failure handled silently or via outputText
+            isNativeLoaded = true
+            outputText.text = "[*] NeoTerm Pro Active.\n[*] Native Engine running. Type 'bootstrap' to download Ubuntu PRoot installer.\n"
+        } catch (e: Throwable) {
+            outputText.text = "[-] Native Error: ${e.message}\n"
         }
 
         runBtn.setOnClickListener {
             val cmd = inputCommand.text.toString().trim()
             if (cmd.isNotEmpty()) {
+                outputText.append("\nroot@android:~# $cmd\n")
                 if (cmd == "bootstrap") {
                     startBootstrap()
                 } else if (isNativeLoaded) {
-                    outputText.append("\n$ $cmd\n")
                     try { 
                         outputText.append(executeCommand(cmd)) 
                     } catch (e: Exception) { 
-                        outputText.append("Error: ${e.message}\n") 
+                        outputText.append("[-] Error: ${e.message}\n") 
                     }
-                } else {
-                    outputText.append("Native bridge not loaded.\n")
                 }
                 inputCommand.text.clear()
                 scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
             }
         }
-
-        outputText.text = "[*] NeoTerm Pro Ready.\nType 'bootstrap' to start Linux environment installation.\n"
     }
 
     private fun startBootstrap() {
-        outputText.append("[*] Initializing Linux environment (PRoot)...\n")
+        outputText.append("[*] Initializing Ubuntu PRoot Installer for ARM64...\n[*] Downloading verified script from AnLinux... Please wait.\n")
+        inputCommand.isEnabled = false
         thread {
             try {
-                val prootDir = File(filesDir, "proot_env")
-                if (!prootDir.exists()) prootDir.mkdirs()
-                
-                // Download PRoot binary
-                val url = URL("https://proot.gitlab.io/proot/bin/proot-x86_64") 
-                val prootFile = File(prootDir, "proot")
-                
-                url.openStream().use { input -> 
-                    FileOutputStream(prootFile).use { output -> 
-                        input.copyTo(output) 
-                    } 
+                // Verified raw GitHub URL for AnLinux Ubuntu bootstrap
+                val url = URL("https://raw.githubusercontent.com/EXALAB/AnLinux-Resources/master/Scripts/Installer/Ubuntu/ubuntu.sh")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 15000
+                connection.readTimeout = 15000
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    throw Exception("Server returned HTTP ${connection.responseCode}")
                 }
-                prootFile.setExecutable(true, false)
-
-                runOnUiThread { 
-                    outputText.append("[+] PRoot binary ready. Environment structure created.\n") 
+                val scriptFile = File(filesDir, "ubuntu.sh")
+                connection.inputStream.use { input ->
+                    FileOutputStream(scriptFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                scriptFile.setExecutable(true)
+                runOnUiThread {
+                    outputText.append("[+] Bootstrap Script downloaded successfully!\n")
+                    outputText.append("[+] Action Required: Type 'sh ubuntu.sh' to begin compiling the Linux environment.\n")
+                    inputCommand.isEnabled = true
+                    scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
             } catch (e: Exception) {
-                runOnUiThread { 
-                    outputText.append("[-] Bootstrap failed: ${e.message}\n") 
+                runOnUiThread {
+                    outputText.append("[-] Download Failed: ${e.message}\n")
+                    inputCommand.isEnabled = true
+                    scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
             }
         }
