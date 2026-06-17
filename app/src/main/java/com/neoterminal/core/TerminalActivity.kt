@@ -1,39 +1,18 @@
 package com.neoterminal.core
 import android.app.Activity
+import android.graphics.Color
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
 import android.widget.TextView
 class TerminalActivity : Activity() {
-private var isNativeLoaded = false
-private external fun executeCommand(command: String): String
 override fun onCreate(savedInstanceState: Bundle?) {
-
 super.onCreate(savedInstanceState)
-setContentView(R.layout.activity_main)
-val outputText = findViewById<TextView>(R.id.terminalOutput)
-val inputCommand = findViewById<EditText>(R.id.inputCommand)
-val runBtn = findViewById<Button>(R.id.runButton)
-try {
-System.loadLibrary("neoterminal_native")
-isNativeLoaded = true
-outputText.text = "NeoTerminal Started.\nSystem Ready.\n"
-} catch (e: Throwable) {
-outputText.text = "Error Loading C++ Library: ${e.message}\n"
-}
-runBtn.setOnClickListener {
-val cmd = inputCommand.text.toString()
-if (cmd.isNotEmpty()) {
-outputText.append("\n$ $cmd\n")
-if (isNativeLoaded) {
-try {
-outputText.append(executeCommand(cmd))
-} catch (e: Exception) {
-outputText.append("Error: ${e.message}\n")
-}
-}
-inputCommand.text.clear()
-}
-}
+// HACKER MODE: No XML inflation. No C++ Native calls. Pure dynamic view injection.
+val tv = TextView(this)
+tv.text = "SYSTEM HACKED: Bare Metal UI is working!\nXML and C++ bypassed.\nWaiting for further instructions..."
+tv.setTextColor(Color.GREEN)
+tv.setBackgroundColor(Color.BLACK)
+tv.textSize = 20f
+tv.setPadding(40, 40, 40, 40)
+setContentView(tv)
 }
 }
