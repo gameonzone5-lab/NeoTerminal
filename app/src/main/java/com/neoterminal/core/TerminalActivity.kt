@@ -64,18 +64,27 @@ outputText.append("[*] First boot detected. Downloading Linux core tools. Please
 inputCommand.isEnabled = false
 thread {
 try {
+// FIXED URL: 1.31.0 instead of 1.31.1
 val url = URL("https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv8l")
-url.openStream().use { input -> FileOutputStream(busyboxFile).use { output -> input.copyTo(output) } }
+val connection = url.openConnection()
+connection.connectTimeout = 15000
+connection.readTimeout = 15000
+connection.getInputStream().use { input ->
+FileOutputStream(busyboxFile).use { output ->
+input.copyTo(output)
+}
+}
 busyboxFile.setExecutable(true, false)
 runOnUiThread {
-outputText.append("[+] Download complete! Security bypassed.\n[+] Environment ready. Try commands like 'ls', 'pwd', 'ifconfig'.\n[!] Note: This is a core shell, not full Ubuntu, so 'apt' is not available.\n")
+outputText.append("[+] Download complete! Security bypassed.\n[+] Environment ready. Try commands like 'ls', 'pwd', 'ifconfig'.\n")
 inputCommand.isEnabled = true
 scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
 }
 } catch (e: Exception) {
 runOnUiThread {
-outputText.append("[-] Download failed. Check internet connection. Error: ${e.message}\n")
+outputText.append("[-] Download failed. Error: ${e.message}\n")
 inputCommand.isEnabled = true
+scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
 }
 }
 }
