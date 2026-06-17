@@ -23,25 +23,26 @@ class TerminalActivity : Activity() {
         val rootLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.BLACK) }
         outputText = TextView(this).apply { setTextColor(Color.GREEN); textSize = 14f; setPadding(16,16,16,16) }
         scrollView = ScrollView(this).apply { addView(outputText); layoutParams = LinearLayout.LayoutParams(-1, 0, 1f) }
-        inputCommand = EditText(this).apply { hint = "root@android:~#"; setTextColor(Color.BLACK); setBackgroundColor(Color.LTGRAY) }
+        inputCommand = EditText(this).apply { hint = "root@userland:~#"; setTextColor(Color.BLACK); setBackgroundColor(Color.LTGRAY) }
         runBtn = Button(this).apply { text = "EXECUTE" }
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Ghost Engine Initiated.\n[*] Bypassing Android restrictions...\n"
+        outputText.text = "[*] NeoTerm Pro (UserLAnd Chroot Architecture).\n"
 
-        val aptFile = File(filesDir, "usr/bin/apt")
+        val rootfs = File(filesDir, "rootfs")
+        val aptFile = File(rootfs, "data/data/com.termux/files/usr/bin/apt")
         if (!aptFile.exists()) {
-            outputText.append("[!] Core Linux system missing or corrupted.\n[!] Type 'hack' to auto-deploy the payload.\n")
+            outputText.append("[!] Rootfs empty. Type 'hack' to build system.\n")
         } else {
-            outputText.append("[+] Environment Secure. Ready for commands.\n")
+            outputText.append("[+] Rootfs Secure. Ready for commands.\n")
         }
 
         runBtn.setOnClickListener {
             val cmd = inputCommand.text.toString().trim()
             if (cmd.isNotEmpty()) {
                 if (cmd.lowercase() == "hack" || cmd.lowercase() == "bootstrap") {
-                    deployPayload()
+                    deployUserlandPayload()
                 } else {
                     executeCommand(cmd)
                 }
@@ -57,25 +58,36 @@ class TerminalActivity : Activity() {
         thread {
             try {
                 val prootFile = File(filesDir, "proot")
-                val tmpDir = File(filesDir, "usr/tmp")
-                if (!tmpDir.exists()) tmpDir.mkdirs()
+                val rootfs = File(filesDir, "rootfs")
+                val homeDir = "/data/data/com.termux/files/home"
+                val tmpDir = "/data/data/com.termux/files/usr/tmp"
 
-                // Hardcoded PATH injection to prevent $PATH=(null) errors
                 val envList = mutableListOf(
                     "PATH=/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin",
                     "PREFIX=/data/data/com.termux/files/usr",
                     "LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib",
-                    "HOME=/data/data/com.termux/files/home",
+                    "HOME=$homeDir",
                     "TERM=xterm-256color",
-                    "TMPDIR=${tmpDir.absolutePath}",
-                    "PROOT_TMP_DIR=${tmpDir.absolutePath}",
+                    "TMPDIR=$tmpDir",
+                    "PROOT_TMP_DIR=$tmpDir",
                     "PROOT_NO_SECCOMP=1"
                 )
 
-                // Force pure bash execution to bypass broken 'sh' links
                 val bashPath = "/data/data/com.termux/files/usr/bin/bash"
-                val finalCmdArray = if (prootFile.exists()) {
-                    arrayOf(prootFile.absolutePath, "-0", "-b", "${filesDir.absolutePath}:/data/data/com.termux/files", bashPath, "-c", cmd)
+                val shPath = "/data/data/com.termux/files/usr/bin/sh"
+
+                val finalCmdArray = if (prootFile.exists() && File(rootfs, bashPath).exists()) {
+                    // USERLAND CHROOT METHOD: PRoot sets rootfs as `/`, binds Android's /system for linker64
+                    arrayOf(
+                        prootFile.absolutePath,
+                        "-r", rootfs.absolutePath,
+                        "-b", "/system",
+                        "-b", "/dev",
+                        "-b", "/proc",
+                        "-0",
+                        "-w", homeDir,
+                        bashPath, "-c", cmd
+                    )
                 } else {
                     arrayOf("sh", "-c", cmd)
                 }
@@ -101,20 +113,24 @@ class TerminalActivity : Activity() {
         }
     }
 
-    private fun deployPayload() {
+    private fun deployUserlandPayload() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] INITIATING HACKER PAYLOAD (Auto-Repair & Deploy)...\n")
+        outputText.append("\n[*] INITIATING USERLAND ROOTFS DEPLOYMENT...\n")
         thread {
             try {
-                val usrDir = File(filesDir, "usr")
-                val homeDir = File(filesDir, "home")
+                // Create exact physical path inside rootfs
+                val rootfs = File(filesDir, "rootfs")
+                if (rootfs.exists()) rootfs.deleteRecursively()
+                rootfs.mkdirs()
 
-                runOnUiThread { outputText.append("[*] Wiping corrupted files and old broken links...\n") }
-                if (usrDir.exists()) usrDir.deleteRecursively()
+                val termuxBase = File(rootfs, "data/data/com.termux/files")
+                val usrDir = File(termuxBase, "usr")
+                val homeDir = File(termuxBase, "home")
                 usrDir.mkdirs()
                 homeDir.mkdirs()
+                File(usrDir, "tmp").mkdirs()
 
-                runOnUiThread { outputText.append("[*] Injecting Termux Core...\n") }
+                runOnUiThread { outputText.append("[*] Extracting Termux Base into Rootfs...\n") }
                 val url = URL("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip")
                 val zipStream = ZipInputStream(url.openStream())
                 var entry = zipStream.nextEntry
@@ -136,35 +152,30 @@ class TerminalActivity : Activity() {
                 }
                 zipStream.close()
 
-                runOnUiThread { outputText.append("[*] Forcing Symlinks (with Hard-Copy Fallback)...\n") }
+                runOnUiThread { outputText.append("[*] Generating UserLAnd Symlinks...\n") }
                 symlinks.forEach { line ->
                     val parts = line.split("←")
                     if (parts.size == 2) {
                         val target = parts[0]
                         val link = File(usrDir, parts[1])
                         if (link.exists()) link.delete()
-                        try {
-                            Os.symlink(target, link.absolutePath)
-                        } catch (e: Exception) {
-                            // BULLETPROOF FALLBACK: Copy the actual file if symlink fails
+                        try { Os.symlink(target, link.absolutePath) } catch (e: Exception) {
                             try {
                                 val targetFile = File(link.parentFile, target)
-                                if (targetFile.exists()) {
-                                    targetFile.copyTo(link, overwrite = true)
-                                }
+                                if (targetFile.exists()) targetFile.copyTo(link, overwrite = true)
                             } catch (ex: Exception) {}
                         }
                     }
                 }
 
-                runOnUiThread { outputText.append("[*] Enforcing Root Execution Policies...\n") }
+                runOnUiThread { outputText.append("[*] Enforcing Chroot Permissions...\n") }
                 usrDir.walkTopDown().forEach { file ->
                     if (file.isFile && (file.parentFile?.name == "bin" || file.parentFile?.name == "libexec")) {
                         file.setExecutable(true)
                     }
                 }
 
-                runOnUiThread { outputText.append("[*] Injecting PRoot Engine...\n") }
+                runOnUiThread { outputText.append("[*] Injecting Static PRoot Engine...\n") }
                 val prootFile = File(filesDir, "proot")
                 val prootUrl = URL("https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static")
                 val conn = prootUrl.openConnection() as HttpURLConnection
@@ -176,14 +187,14 @@ class TerminalActivity : Activity() {
                 prootFile.setExecutable(true)
 
                 runOnUiThread {
-                    outputText.append("\n[+] SYSTEM BREACHED SUCCESSFULLY! 🎉\n")
-                    outputText.append("[+] You now have FULL LINUX ROOT.\n")
+                    outputText.append("\n[+] USERLAND ROOTFS BUILT SUCCESSFULLY! 🎉\n")
+                    outputText.append("[+] Chroot bypass active. Try 'apt update'.\n")
                     runBtn.isEnabled = true
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    outputText.append("[-] Payload Failed: ${e.message}\n")
+                    outputText.append("[-] Build Failed: ${e.message}\n")
                     runBtn.isEnabled = true
                 }
             }
