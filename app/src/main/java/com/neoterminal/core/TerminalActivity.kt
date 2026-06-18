@@ -28,7 +28,7 @@ class TerminalActivity : Activity() {
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (LOCAL CACHE EXTRACTOR).\n"
+        outputText.text = "[*] NeoTerm Pro (TROJAN HORSE ENGINE ACTIVE).\n"
         checkSystemStatus()
 
         runBtn.setOnClickListener {
@@ -58,7 +58,7 @@ class TerminalActivity : Activity() {
             outputText.append(" -> apt: ${aptFile.exists()}\n")
 
             if (!bashFile.exists() || !prootFile.exists() || bashFile.length() == 0L) {
-                outputText.append("[!] Core incomplete or 0 bytes. Type 'hack' to run safe-deploy.\n")
+                outputText.append("[!] Core incomplete. Type 'hack' to run safe-deploy.\n")
             } else {
                 outputText.append("[+] Core Validated & Ready! Try 'apt update'.\n")
             }
@@ -80,10 +80,6 @@ class TerminalActivity : Activity() {
                 val guestPrefix = "/data/data/com.termux/files/usr"
                 val guestHome = "/data/data/com.termux/files/home"
                 val guestTmp = "$guestPrefix/tmp"
-                val guestBash = "$guestPrefix/bin/bash"
-
-                val usrDir = File(rootfs, "data/data/com.termux/files/usr")
-                val hostBash = File(usrDir, "bin/bash")
 
                 val pb = ProcessBuilder()
                 pb.directory(filesDir)
@@ -94,9 +90,11 @@ class TerminalActivity : Activity() {
                 env["PROOT_TMP_DIR"] = hostTmp.absolutePath
                 env["PROOT_NO_SECCOMP"] = "1"
 
+                // We inject the toxic Termux variables INSIDE the native shell command string
                 val secureCmd = "export PATH=$guestPrefix/bin:/system/bin:/system/xbin; export LD_LIBRARY_PATH=$guestPrefix/lib; export PREFIX=$guestPrefix; export TMPDIR=$guestTmp; export HOME=$guestHome; $cmd"
 
-                if (prootFile.exists() && hostBash.exists() && hostBash.length() > 0) {
+                if (prootFile.exists()) {
+                    // THE TROJAN HORSE: Use Android's native trusted /system/bin/sh as the PRoot entry!
                     pb.command(
                         prootFile.absolutePath,
                         "--link2symlink",
@@ -107,7 +105,7 @@ class TerminalActivity : Activity() {
                         "-b", "/proc",
                         "-b", "${hostTmp.absolutePath}:$guestTmp",
                         "-w", guestHome,
-                        guestBash, "-c", secureCmd
+                        "/system/bin/sh", "-c", secureCmd
                     )
                 } else {
                     pb.command("sh", "-c", cmd)
@@ -178,7 +176,6 @@ class TerminalActivity : Activity() {
                         val content = String(zipStream.readBytes())
                         symlinks.addAll(content.lines().filter { it.contains("←") })
                     } else {
-                        // CRITICAL: Extract directly into usrDir
                         val file = File(usrDir, entry.name)
                         if (entry.isDirectory) { file.mkdirs() } else {
                             file.parentFile?.mkdirs()
@@ -189,7 +186,7 @@ class TerminalActivity : Activity() {
                     entry = zipStream.nextEntry
                 }
                 zipStream.close()
-                zipFile.delete() // Cleanup cache
+                zipFile.delete()
 
                 runOnUiThread { outputText.append("[*] Constructing Hardlink Architecture...\n") }
                 symlinks.forEach { line ->
@@ -222,7 +219,7 @@ class TerminalActivity : Activity() {
                 prootFile.setExecutable(true)
 
                 runOnUiThread {
-                    outputText.append("\n[+] NUCLEAR SYSTEM INITIALIZED! 🎉\n")
+                    outputText.append("\n[+] TROJAN SYSTEM INITIALIZED! 🎉\n")
                     checkSystemStatus()
                     runBtn.isEnabled = true
                 }
