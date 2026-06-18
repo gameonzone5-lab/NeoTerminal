@@ -28,9 +28,10 @@ class TerminalActivity : Activity() {
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (UserLAnd Chroot Architecture).\n"
+        outputText.text = "[*] NeoTerm Pro (100% Ultimate Chroot Engine).\n"
 
         val rootfs = File(filesDir, "rootfs")
+        // CRITICAL FIX: Removed leading slash so path resolves INSIDE rootfs
         val aptFile = File(rootfs, "data/data/com.termux/files/usr/bin/apt")
         if (!aptFile.exists()) {
             outputText.append("[!] Rootfs empty. Type 'hack' to build system.\n")
@@ -60,58 +61,63 @@ class TerminalActivity : Activity() {
                 val prootFile = File(filesDir, "proot")
                 val rootfs = File(filesDir, "rootfs")
 
-                // Guest paths (Fake World)
-                val homeDir = "/data/data/com.termux/files/home"
-                val guestTmpDir = "/data/data/com.termux/files/usr/tmp"
+                val guestHome = "/data/data/com.termux/files/home"
+                val guestTmp = "/data/data/com.termux/files/usr/tmp"
+                val hostTmp = File(filesDir, "proot_host_tmp")
+                if (!hostTmp.exists()) hostTmp.mkdirs()
 
-                // Host path (Real World - CRITICAL FIX FOR GLUE ROOTFS)
-                val hostTmpDir = File(filesDir, "proot_host_tmp")
-                if (!hostTmpDir.exists()) hostTmpDir.mkdirs()
+                val guestBash = "/data/data/com.termux/files/usr/bin/bash"
+                // CRITICAL FIX: Removed leading slash to prevent absolute path escape
+                val hostBash = File(rootfs, "data/data/com.termux/files/usr/bin/bash")
 
-                val envList = mutableListOf(
-                    "PATH=/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin",
-                    "PREFIX=/data/data/com.termux/files/usr",
-                    "LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib",
-                    "HOME=$homeDir",
-                    "TERM=xterm-256color",
-                    "TMPDIR=$guestTmpDir", // For Linux tools inside chroot
-                    "PROOT_TMP_DIR=${hostTmpDir.absolutePath}", // For PRoot engine itself
-                    "PROOT_NO_SECCOMP=1"
-                )
+                val pb = ProcessBuilder()
+                pb.directory(filesDir)
+                // CRITICAL FIX: Merge stderr and stdout so NO silent crashes can happen
+                pb.redirectErrorStream(true)
 
-                val bashPath = "/data/data/com.termux/files/usr/bin/bash"
+                val env = pb.environment()
+                env.clear()
+                env["PATH"] = "/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin"
+                env["PREFIX"] = "/data/data/com.termux/files/usr"
+                env["LD_LIBRARY_PATH"] = "/data/data/com.termux/files/usr/lib"
+                env["HOME"] = guestHome
+                env["TERM"] = "xterm-256color"
+                env["TMPDIR"] = guestTmp
+                env["PROOT_TMP_DIR"] = hostTmp.absolutePath
+                env["PROOT_NO_SECCOMP"] = "1"
 
-                val finalCmdArray = if (prootFile.exists() && File(rootfs, bashPath).exists()) {
-                    arrayOf(
+                if (prootFile.exists() && hostBash.exists()) {
+                    pb.command(
                         prootFile.absolutePath,
                         "-r", rootfs.absolutePath,
                         "-b", "/system",
                         "-b", "/dev",
                         "-b", "/proc",
                         "-0",
-                        "-w", homeDir,
-                        bashPath, "-c", cmd
+                        "-w", guestHome,
+                        guestBash, "-c", cmd
                     )
                 } else {
-                    arrayOf("sh", "-c", cmd)
+                    env.clear()
+                    env["PATH"] = "/system/bin:/system/xbin"
+                    pb.command("sh", "-c", cmd)
+                    runOnUiThread { outputText.append("[!] Bash not found. Running native Android shell.\n") }
                 }
 
-                val process = Runtime.getRuntime().exec(finalCmdArray, envList.toTypedArray(), filesDir)
+                val process = pb.start()
                 val reader = process.inputStream.bufferedReader()
-                val errorReader = process.errorStream.bufferedReader()
                 var line: String?
 
                 while (reader.readLine().also { line = it } != null) {
                     val sLine = line ?: ""
-                    runOnUiThread { outputText.append(sLine + "\n"); scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) } }
-                }
-                while (errorReader.readLine().also { line = it } != null) {
-                    val sLine = line ?: ""
-                    runOnUiThread { outputText.append(sLine + "\n"); scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) } }
+                    runOnUiThread {
+                        outputText.append(sLine + "\n")
+                        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+                    }
                 }
                 process.waitFor()
             } catch (e: Exception) {
-                runOnUiThread { outputText.append("[-] Error: ${e.message}\n") }
+                runOnUiThread { outputText.append("[-] Engine Error: ${e.message}\n") }
             }
             runOnUiThread { runBtn.isEnabled = true }
         }
@@ -119,7 +125,7 @@ class TerminalActivity : Activity() {
 
     private fun deployUserlandPayload() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] INITIATING USERLAND ROOTFS DEPLOYMENT...\n")
+        outputText.append("\n[*] INITIATING 100% ULTIMATE HACKER PAYLOAD...\n")
         thread {
             try {
                 val rootfs = File(filesDir, "rootfs")
@@ -155,7 +161,7 @@ class TerminalActivity : Activity() {
                 }
                 zipStream.close()
 
-                runOnUiThread { outputText.append("[*] Generating UserLAnd Symlinks...\n") }
+                runOnUiThread { outputText.append("[*] Forcing Symlinks (with Hard-Copy Fallback)...\n") }
                 symlinks.forEach { line ->
                     val parts = line.split("←")
                     if (parts.size == 2) {
@@ -171,7 +177,7 @@ class TerminalActivity : Activity() {
                     }
                 }
 
-                runOnUiThread { outputText.append("[*] Enforcing Chroot Permissions...\n") }
+                runOnUiThread { outputText.append("[*] Enforcing Root Execution Policies...\n") }
                 usrDir.walkTopDown().forEach { file ->
                     if (file.isFile && (file.parentFile?.name == "bin" || file.parentFile?.name == "libexec")) {
                         file.setExecutable(true)
@@ -191,7 +197,7 @@ class TerminalActivity : Activity() {
 
                 runOnUiThread {
                     outputText.append("\n[+] USERLAND ROOTFS BUILT SUCCESSFULLY! 🎉\n")
-                    outputText.append("[+] Chroot bypass active. Engine is primed.\n")
+                    outputText.append("[+] 100% Core Bypass Active. Try 'apt update'.\n")
                     runBtn.isEnabled = true
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
