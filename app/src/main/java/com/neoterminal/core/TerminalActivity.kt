@@ -26,7 +26,7 @@ class TerminalActivity : Activity() {
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (PURE ALPINE LINUX CORE).\n"
+        outputText.text = "[*] NeoTerm Pro (NATIVE ALPINE CORE).\n"
         checkSystemStatus()
 
         runBtn.setOnClickListener {
@@ -49,9 +49,9 @@ class TerminalActivity : Activity() {
 
         runOnUiThread {
             if (!shFile.exists() || !prootFile.exists()) {
-                outputText.append("[!] Alpine Linux missing. Type 'bootstrap' to deploy natively.\n")
+                outputText.append("[!] Alpine Linux missing. Type 'bootstrap' to deploy.\n")
             } else {
-                outputText.append("[+] Pure Linux Core Ready! Try 'apk update' (Alpine uses apk, not apt).\n")
+                outputText.append("[+] Pure Linux Core Ready! Try 'apk update'.\n")
             }
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
@@ -78,9 +78,9 @@ class TerminalActivity : Activity() {
                 env["PROOT_NO_SECCOMP"] = "1"
 
                 if (prootFile.exists() && File(rootfs, "bin/sh").exists()) {
-                    // PURE LINUX EXECUTION: No APEX, no Bionic linker, just pure musl libc.
                     pb.command(
                         prootFile.absolutePath,
+                        "--link2symlink",
                         "-0",
                         "-r", rootfs.absolutePath,
                         "-b", "/dev",
@@ -130,29 +130,25 @@ class TerminalActivity : Activity() {
 
     private fun deployAlpinePayload() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] INITIATING NATIVE ALPINE DEPLOYMENT...\n")
+        outputText.append("\n[*] INITIATING NATIVE DEPLOYMENT...\n")
         thread {
             try {
                 val rootfs = File(filesDir, "alpine-fs")
                 if (rootfs.exists()) rootfs.deleteRecursively()
                 rootfs.mkdirs()
 
-                runOnUiThread { outputText.append("[*] Downloading Static PRoot & BusyBox...\n") }
+                runOnUiThread { outputText.append("[*] Downloading Static PRoot...\n") }
                 val prootFile = File(filesDir, "proot")
-                val busyboxFile = File(filesDir, "busybox")
-
                 downloadFile("https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static", prootFile)
-                downloadFile("https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv8l", busyboxFile)
-
                 prootFile.setExecutable(true, false)
-                busyboxFile.setExecutable(true, false)
 
                 runOnUiThread { outputText.append("[*] Downloading Pure Alpine Linux RootFS...\n") }
                 val tarFile = File(filesDir, "alpine.tar.gz")
                 downloadFile("https://dl-cdn.alpinelinux.org/alpine/v3.18/releases/aarch64/alpine-minirootfs-3.18.4-aarch64.tar.gz", tarFile)
 
-                runOnUiThread { outputText.append("[*] Extracting Natively via BusyBox (Zero Symlink Corruption)...\n") }
-                val extractCmd = arrayOf(busyboxFile.absolutePath, "tar", "-xzf", tarFile.absolutePath, "-C", rootfs.absolutePath)
+                runOnUiThread { outputText.append("[*] Extracting Natively via Android OS tar...\n") }
+                // CRITICAL FIX: Use Android's native tar, completely removing the failing busybox dependency
+                val extractCmd = arrayOf("tar", "-xzf", tarFile.absolutePath, "-C", rootfs.absolutePath)
                 val process = ProcessBuilder(*extractCmd).redirectErrorStream(true).directory(filesDir).start()
 
                 val reader = process.inputStream.bufferedReader()
@@ -161,12 +157,12 @@ class TerminalActivity : Activity() {
                     runOnUiThread { outputText.append("  $line\n") }
                 }
                 val extCode = process.waitFor()
-                if (extCode != 0) throw Exception("BusyBox extraction failed with code $extCode")
+                if (extCode != 0) throw Exception("Android tar extraction failed with code $extCode")
 
                 tarFile.delete()
 
                 runOnUiThread {
-                    outputText.append("\n[+] ALPINE LINUX INSTALLED FLAWLESSLY! 🎉\n")
+                    outputText.append("\n[+] ALPINE LINUX INSTALLED FLAWLESSLY!\n")
                     checkSystemStatus()
                     runBtn.isEnabled = true
                 }
