@@ -7,9 +7,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
-import android.system.Os
 import android.graphics.Color
 
 class TerminalActivity : Activity() {
@@ -23,19 +21,19 @@ class TerminalActivity : Activity() {
         val rootLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.BLACK) }
         outputText = TextView(this).apply { setTextColor(Color.GREEN); textSize = 14f; setPadding(16,16,16,16) }
         scrollView = ScrollView(this).apply { addView(outputText); layoutParams = LinearLayout.LayoutParams(-1, 0, 1f) }
-        inputCommand = EditText(this).apply { hint = "root@android:~#"; setTextColor(Color.BLACK); setBackgroundColor(Color.LTGRAY) }
+        inputCommand = EditText(this).apply { hint = "root@alpine:~#"; setTextColor(Color.BLACK); setBackgroundColor(Color.LTGRAY) }
         runBtn = Button(this).apply { text = "EXECUTE" }
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (W^X BYPASS ENGINE).\n"
+        outputText.text = "[*] NeoTerm Pro (PURE ALPINE LINUX CORE).\n"
         checkSystemStatus()
 
         runBtn.setOnClickListener {
             val cmd = inputCommand.text.toString().trim()
             if (cmd.isNotEmpty()) {
                 if (cmd.lowercase() == "hack" || cmd.lowercase() == "bootstrap") {
-                    deployUltimatePayload()
+                    deployAlpinePayload()
                 } else {
                     executeCommand(cmd)
                 }
@@ -45,15 +43,15 @@ class TerminalActivity : Activity() {
     }
 
     private fun checkSystemStatus() {
-        val rootfs = File(filesDir, "rootfs")
-        val bashFile = File(rootfs, "data/data/com.termux/files/usr/bin/bash")
+        val rootfs = File(filesDir, "alpine-fs")
+        val shFile = File(rootfs, "bin/sh")
         val prootFile = File(filesDir, "proot")
 
         runOnUiThread {
-            if (!bashFile.exists() || !prootFile.exists() || bashFile.length() == 0L) {
-                outputText.append("[!] Engine missing. Type 'hack' to deploy.\n")
+            if (!shFile.exists() || !prootFile.exists()) {
+                outputText.append("[!] Alpine Linux missing. Type 'bootstrap' to deploy natively.\n")
             } else {
-                outputText.append("[+] Core Ready. Try 'apt update'.\n")
+                outputText.append("[+] Pure Linux Core Ready! Try 'apk update' (Alpine uses apk, not apt).\n")
             }
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
@@ -66,13 +64,7 @@ class TerminalActivity : Activity() {
         thread {
             try {
                 val prootFile = File(filesDir, "proot")
-                val rootfs = File(filesDir, "rootfs")
-                val hostTmp = File(filesDir, "proot_host_tmp")
-                if (!hostTmp.exists()) hostTmp.mkdirs()
-
-                val guestPrefix = "/data/data/com.termux/files/usr"
-                val guestHome = "/data/data/com.termux/files/home"
-                val guestTmp = "$guestPrefix/tmp"
+                val rootfs = File(filesDir, "alpine-fs")
 
                 val pb = ProcessBuilder()
                 pb.directory(filesDir)
@@ -80,23 +72,22 @@ class TerminalActivity : Activity() {
 
                 val env = pb.environment()
                 env.clear()
-                env["PROOT_TMP_DIR"] = hostTmp.absolutePath
+                env["PATH"] = "/bin:/usr/bin:/sbin:/usr/sbin"
+                env["HOME"] = "/root"
+                env["TERM"] = "xterm-256color"
                 env["PROOT_NO_SECCOMP"] = "1"
 
-                val secureCmd = "export PATH=$guestPrefix/bin:/system/bin:/system/xbin; export LD_LIBRARY_PATH=$guestPrefix/lib; export PREFIX=$guestPrefix; export TMPDIR=$guestTmp; export HOME=$guestHome; $cmd"
-
-                if (prootFile.exists() && rootfs.exists()) {
+                if (prootFile.exists() && File(rootfs, "bin/sh").exists()) {
+                    // PURE LINUX EXECUTION: No APEX, no Bionic linker, just pure musl libc.
                     pb.command(
                         prootFile.absolutePath,
-                        "--link2symlink",
                         "-0",
                         "-r", rootfs.absolutePath,
-                        "-b", "/system",
                         "-b", "/dev",
                         "-b", "/proc",
-                        "-b", "${hostTmp.absolutePath}:$guestTmp",
-                        "-w", guestHome,
-                        "/system/bin/sh", "-c", secureCmd
+                        "-b", "/sys",
+                        "-w", "/root",
+                        "/bin/sh", "-c", cmd
                     )
                 } else {
                     pb.command("sh", "-c", cmd)
@@ -116,7 +107,7 @@ class TerminalActivity : Activity() {
 
                 val exitCode = process.waitFor()
                 runOnUiThread {
-                    if (exitCode != 0) outputText.append("[DEBUG] Exit Code: $exitCode\n")
+                    if(exitCode != 0) outputText.append("[DEBUG] Exit Code: $exitCode\n")
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
             } catch (e: Exception) {
@@ -130,95 +121,58 @@ class TerminalActivity : Activity() {
         val url = URL(urlStr)
         val conn = url.openConnection() as HttpURLConnection
         conn.instanceFollowRedirects = true
-        conn.connectTimeout = 30000
-        conn.readTimeout = 30000
+        conn.connectTimeout = 15000
+        conn.readTimeout = 15000
         conn.connect()
-
-        if (conn.responseCode != HttpURLConnection.HTTP_OK) {
-            throw Exception("Server returned ${conn.responseCode} for $urlStr")
-        }
-
         conn.inputStream.use { input -> FileOutputStream(dest).use { output -> input.copyTo(output) } }
+        if (dest.length() == 0L) throw Exception("Downloaded file is 0 bytes.")
     }
 
-    private fun deployUltimatePayload() {
+    private fun deployAlpinePayload() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] INITIATING ULTIMATE W^X BYPASS PAYLOAD...\n")
+        outputText.append("\n[*] INITIATING NATIVE ALPINE DEPLOYMENT...\n")
         thread {
             try {
-                val rootfs = File(filesDir, "rootfs")
+                val rootfs = File(filesDir, "alpine-fs")
                 if (rootfs.exists()) rootfs.deleteRecursively()
                 rootfs.mkdirs()
 
-                val termuxBase = File(rootfs, "data/data/com.termux/files")
-                val usrDir = File(termuxBase, "usr")
-                val homeDir = File(termuxBase, "home")
-                usrDir.mkdirs()
-                homeDir.mkdirs()
-                File(usrDir, "tmp").mkdirs()
-
-                runOnUiThread { outputText.append("[*] Downloading Official Bootstrap...\n") }
-                val zipFile = File(filesDir, "bootstrap.zip")
-                downloadFile("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip", zipFile)
-
-                if (zipFile.length() < 1000000) throw Exception("ZIP corrupted! Size: ${zipFile.length()}")
-                runOnUiThread { outputText.append("[+] Bootstrap Cached. Extracting...\n") }
-
-                val zipStream = ZipInputStream(zipFile.inputStream())
-                var entry = zipStream.nextEntry
-                val symlinks = mutableListOf<String>()
-
-                while (entry != null) {
-                    if (entry.name == "SYMLINKS.txt") {
-                        val content = String(zipStream.readBytes())
-                        symlinks.addAll(content.lines().filter { it.contains("←") })
-                    } else {
-                        val file = File(usrDir, entry.name)
-                        if (entry.isDirectory) { file.mkdirs() } else {
-                            file.parentFile?.mkdirs()
-                            FileOutputStream(file).use { zipStream.copyTo(it) }
-                        }
-                    }
-                    zipStream.closeEntry()
-                    entry = zipStream.nextEntry
-                }
-                zipStream.close()
-                zipFile.delete()
-
-                runOnUiThread { outputText.append("[*] Restoring Linux Symlinks...\n") }
-                symlinks.forEach { line ->
-                    val parts = line.split("←")
-                    if (parts.size == 2) {
-                        val target = parts[0]
-                        val link = File(usrDir, parts[1])
-                        if (link.exists()) link.delete()
-                        try { Os.symlink(target, link.absolutePath) } catch (e: Exception) {
-                            try {
-                                val targetFile = File(link.parentFile, target)
-                                if (targetFile.exists()) targetFile.copyTo(link, overwrite = true)
-                            } catch (ex: Exception) {}
-                        }
-                    }
-                }
-
-                runOnUiThread { outputText.append("[*] Setting Permissions...\n") }
-                usrDir.walkTopDown().forEach { file ->
-                    if (file.isFile) file.setExecutable(true)
-                }
-
-                runOnUiThread { outputText.append("[*] Injecting Official PRoot...\n") }
+                runOnUiThread { outputText.append("[*] Downloading Static PRoot & BusyBox...\n") }
                 val prootFile = File(filesDir, "proot")
+                val busyboxFile = File(filesDir, "busybox")
+
                 downloadFile("https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static", prootFile)
-                prootFile.setExecutable(true)
+                downloadFile("https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv8l", busyboxFile)
+
+                prootFile.setExecutable(true, false)
+                busyboxFile.setExecutable(true, false)
+
+                runOnUiThread { outputText.append("[*] Downloading Pure Alpine Linux RootFS...\n") }
+                val tarFile = File(filesDir, "alpine.tar.gz")
+                downloadFile("https://dl-cdn.alpinelinux.org/alpine/v3.18/releases/aarch64/alpine-minirootfs-3.18.4-aarch64.tar.gz", tarFile)
+
+                runOnUiThread { outputText.append("[*] Extracting Natively via BusyBox (Zero Symlink Corruption)...\n") }
+                val extractCmd = arrayOf(busyboxFile.absolutePath, "tar", "-xzf", tarFile.absolutePath, "-C", rootfs.absolutePath)
+                val process = ProcessBuilder(*extractCmd).redirectErrorStream(true).directory(filesDir).start()
+
+                val reader = process.inputStream.bufferedReader()
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    runOnUiThread { outputText.append("  $line\n") }
+                }
+                val extCode = process.waitFor()
+                if (extCode != 0) throw Exception("BusyBox extraction failed with code $extCode")
+
+                tarFile.delete()
 
                 runOnUiThread {
-                    outputText.append("\n[+] ENGINE READY! W^X Bypass Active. 🎉\n")
+                    outputText.append("\n[+] ALPINE LINUX INSTALLED FLAWLESSLY! 🎉\n")
                     checkSystemStatus()
                     runBtn.isEnabled = true
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    outputText.append("[-] Payload Failed: ${e.message}\n")
+                    outputText.append("[-] Deployment Failed: ${e.message}\n")
                     runBtn.isEnabled = true
                 }
             }
