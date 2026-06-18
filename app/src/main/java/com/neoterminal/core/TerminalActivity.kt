@@ -28,7 +28,7 @@ class TerminalActivity : Activity() {
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (NUCLEAR DEBUG CORE ACTIVE).\n"
+        outputText.text = "[*] NeoTerm Pro (LOCAL CACHE EXTRACTOR).\n"
         checkSystemStatus()
 
         runBtn.setOnClickListener {
@@ -46,21 +46,21 @@ class TerminalActivity : Activity() {
 
     private fun checkSystemStatus() {
         val rootfs = File(filesDir, "rootfs")
-        val termuxBase = File(rootfs, "data/data/com.termux/files")
-        val bashFile = File(termuxBase, "usr/bin/bash")
-        val aptFile = File(termuxBase, "usr/bin/apt")
+        val usrDir = File(rootfs, "data/data/com.termux/files/usr")
+        val bashFile = File(usrDir, "bin/bash")
+        val aptFile = File(usrDir, "bin/apt")
         val prootFile = File(filesDir, "proot")
 
         runOnUiThread {
-            outputText.append("\n[DEBUG] System File Verification:\n")
-            outputText.append(" -> proot exists: ${prootFile.exists()}\n")
-            outputText.append(" -> bash exists: ${bashFile.exists()} (Size: ${bashFile.length()} bytes)\n")
-            outputText.append(" -> apt exists: ${aptFile.exists()}\n")
+            outputText.append("\n[DEBUG] Core Status Check:\n")
+            outputText.append(" -> proot: ${prootFile.exists()}\n")
+            outputText.append(" -> bash: ${bashFile.exists()} (${bashFile.length()} bytes)\n")
+            outputText.append(" -> apt: ${aptFile.exists()}\n")
 
-            if (!bashFile.exists() || !prootFile.exists()) {
-                outputText.append("[!] Core incomplete. Type 'hack' to auto-fix and extract.\n")
+            if (!bashFile.exists() || !prootFile.exists() || bashFile.length() == 0L) {
+                outputText.append("[!] Core incomplete or 0 bytes. Type 'hack' to run safe-deploy.\n")
             } else {
-                outputText.append("[+] Core Validated. Ready for execution.\n")
+                outputText.append("[+] Core Validated & Ready! Try 'apt update'.\n")
             }
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
@@ -82,8 +82,8 @@ class TerminalActivity : Activity() {
                 val guestTmp = "$guestPrefix/tmp"
                 val guestBash = "$guestPrefix/bin/bash"
 
-                val termuxBase = File(rootfs, "data/data/com.termux/files")
-                val hostBash = File(termuxBase, "usr/bin/bash")
+                val usrDir = File(rootfs, "data/data/com.termux/files/usr")
+                val hostBash = File(usrDir, "bin/bash")
 
                 val pb = ProcessBuilder()
                 pb.directory(filesDir)
@@ -96,7 +96,7 @@ class TerminalActivity : Activity() {
 
                 val secureCmd = "export PATH=$guestPrefix/bin:/system/bin:/system/xbin; export LD_LIBRARY_PATH=$guestPrefix/lib; export PREFIX=$guestPrefix; export TMPDIR=$guestTmp; export HOME=$guestHome; $cmd"
 
-                if (prootFile.exists() && hostBash.exists()) {
+                if (prootFile.exists() && hostBash.exists() && hostBash.length() > 0) {
                     pb.command(
                         prootFile.absolutePath,
                         "--link2symlink",
@@ -139,7 +139,7 @@ class TerminalActivity : Activity() {
 
     private fun deployNuclearPayload() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] INITIATING PAYLOAD WITH PATH CORRECTION (usr/usr bug fix)...\n")
+        outputText.append("\n[*] INITIATING SAFE-DEPLOY (Local ZIP Caching)...\n")
         thread {
             try {
                 val rootfs = File(filesDir, "rootfs")
@@ -147,13 +147,29 @@ class TerminalActivity : Activity() {
                 rootfs.mkdirs()
 
                 val termuxBase = File(rootfs, "data/data/com.termux/files")
-                termuxBase.mkdirs()
-                File(termuxBase, "usr/tmp").mkdirs()
-                File(termuxBase, "home").mkdirs()
+                val usrDir = File(termuxBase, "usr")
+                val homeDir = File(termuxBase, "home")
+                usrDir.mkdirs()
+                homeDir.mkdirs()
+                File(usrDir, "tmp").mkdirs()
 
-                runOnUiThread { outputText.append("[*] Extracting Bootstrap relative to Termux Base...\n") }
+                runOnUiThread { outputText.append("[*] Downloading Bootstrap to Local Cache...\n") }
+                val zipFile = File(filesDir, "bootstrap.zip")
                 val url = URL("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip")
-                val zipStream = ZipInputStream(url.openStream())
+                val conn = url.openConnection() as HttpURLConnection
+                conn.instanceFollowRedirects = true
+                conn.connectTimeout = 30000
+                conn.readTimeout = 30000
+                conn.connect()
+
+                conn.inputStream.use { input -> FileOutputStream(zipFile).use { output -> input.copyTo(output) } }
+
+                if (zipFile.length() < 1000000) {
+                    throw Exception("ZIP download corrupted or empty! Size: ${zipFile.length()} bytes")
+                }
+                runOnUiThread { outputText.append("[+] Cache verified (${zipFile.length()} bytes). Extracting...\n") }
+
+                val zipStream = ZipInputStream(zipFile.inputStream())
                 var entry = zipStream.nextEntry
                 val symlinks = mutableListOf<String>()
 
@@ -162,7 +178,8 @@ class TerminalActivity : Activity() {
                         val content = String(zipStream.readBytes())
                         symlinks.addAll(content.lines().filter { it.contains("←") })
                     } else {
-                        val file = File(termuxBase, entry.name)
+                        // CRITICAL: Extract directly into usrDir
+                        val file = File(usrDir, entry.name)
                         if (entry.isDirectory) { file.mkdirs() } else {
                             file.parentFile?.mkdirs()
                             FileOutputStream(file).use { zipStream.copyTo(it) }
@@ -172,9 +189,9 @@ class TerminalActivity : Activity() {
                     entry = zipStream.nextEntry
                 }
                 zipStream.close()
+                zipFile.delete() // Cleanup cache
 
                 runOnUiThread { outputText.append("[*] Constructing Hardlink Architecture...\n") }
-                val usrDir = File(termuxBase, "usr")
                 symlinks.forEach { line ->
                     val parts = line.split("←")
                     if (parts.size == 2) {
@@ -198,12 +215,10 @@ class TerminalActivity : Activity() {
                 runOnUiThread { outputText.append("[*] Injecting Static PRoot Engine...\n") }
                 val prootFile = File(filesDir, "proot")
                 val prootUrl = URL("https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static")
-                val conn = prootUrl.openConnection() as HttpURLConnection
-                conn.instanceFollowRedirects = true
-                conn.connectTimeout = 15000
-                conn.readTimeout = 15000
-                conn.connect()
-                conn.inputStream.use { input -> FileOutputStream(prootFile).use { output -> input.copyTo(output) } }
+                val pConn = prootUrl.openConnection() as HttpURLConnection
+                pConn.instanceFollowRedirects = true
+                pConn.connect()
+                pConn.inputStream.use { input -> FileOutputStream(prootFile).use { output -> input.copyTo(output) } }
                 prootFile.setExecutable(true)
 
                 runOnUiThread {
