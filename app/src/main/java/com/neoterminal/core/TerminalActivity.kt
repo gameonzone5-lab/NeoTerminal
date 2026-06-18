@@ -28,14 +28,14 @@ class TerminalActivity : Activity() {
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (SYSTEM RECOVERED & PERMISSION FIXED).\n"
+        outputText.text = "[*] NeoTerm Pro (W^X BYPASS ENGINE).\n"
         checkSystemStatus()
 
         runBtn.setOnClickListener {
             val cmd = inputCommand.text.toString().trim()
             if (cmd.isNotEmpty()) {
                 if (cmd.lowercase() == "hack" || cmd.lowercase() == "bootstrap") {
-                    deployNuclearPayload()
+                    deployUltimatePayload()
                 } else {
                     executeCommand(cmd)
                 }
@@ -46,15 +46,14 @@ class TerminalActivity : Activity() {
 
     private fun checkSystemStatus() {
         val rootfs = File(filesDir, "rootfs")
-        val termuxBase = File(rootfs, "data/data/com.termux/files")
-        val bashFile = File(termuxBase, "usr/bin/bash")
+        val bashFile = File(rootfs, "data/data/com.termux/files/usr/bin/bash")
         val prootFile = File(filesDir, "proot")
 
         runOnUiThread {
             if (!bashFile.exists() || !prootFile.exists() || bashFile.length() == 0L) {
-                outputText.append("[!] Core incomplete. Type 'hack' to run safe-deploy.\n")
+                outputText.append("[!] Engine missing. Type 'hack' to deploy.\n")
             } else {
-                outputText.append("[+] Core Ready! Try 'apt update'.\n")
+                outputText.append("[+] Core Ready. Try 'apt update'.\n")
             }
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
@@ -74,7 +73,6 @@ class TerminalActivity : Activity() {
                 val guestPrefix = "/data/data/com.termux/files/usr"
                 val guestHome = "/data/data/com.termux/files/home"
                 val guestTmp = "$guestPrefix/tmp"
-                val guestBash = "$guestPrefix/bin/bash"
 
                 val pb = ProcessBuilder()
                 pb.directory(filesDir)
@@ -98,7 +96,7 @@ class TerminalActivity : Activity() {
                         "-b", "/proc",
                         "-b", "${hostTmp.absolutePath}:$guestTmp",
                         "-w", guestHome,
-                        guestBash, "-c", secureCmd
+                        "/system/bin/sh", "-c", secureCmd
                     )
                 } else {
                     pb.command("sh", "-c", cmd)
@@ -118,7 +116,7 @@ class TerminalActivity : Activity() {
 
                 val exitCode = process.waitFor()
                 runOnUiThread {
-                    if(exitCode != 0) outputText.append("[DEBUG] Exit Code: $exitCode\n")
+                    if (exitCode != 0) outputText.append("[DEBUG] Exit Code: $exitCode\n")
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
             } catch (e: Exception) {
@@ -128,9 +126,24 @@ class TerminalActivity : Activity() {
         }
     }
 
-    private fun deployNuclearPayload() {
+    private fun downloadFile(urlStr: String, dest: File) {
+        val url = URL(urlStr)
+        val conn = url.openConnection() as HttpURLConnection
+        conn.instanceFollowRedirects = true
+        conn.connectTimeout = 30000
+        conn.readTimeout = 30000
+        conn.connect()
+
+        if (conn.responseCode != HttpURLConnection.HTTP_OK) {
+            throw Exception("Server returned ${conn.responseCode} for $urlStr")
+        }
+
+        conn.inputStream.use { input -> FileOutputStream(dest).use { output -> input.copyTo(output) } }
+    }
+
+    private fun deployUltimatePayload() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] INITIATING DEPLOYMENT...\n")
+        outputText.append("\n[*] INITIATING ULTIMATE W^X BYPASS PAYLOAD...\n")
         thread {
             try {
                 val rootfs = File(filesDir, "rootfs")
@@ -144,20 +157,12 @@ class TerminalActivity : Activity() {
                 homeDir.mkdirs()
                 File(usrDir, "tmp").mkdirs()
 
-                runOnUiThread { outputText.append("[*] Downloading Bootstrap...\n") }
+                runOnUiThread { outputText.append("[*] Downloading Official Bootstrap...\n") }
                 val zipFile = File(filesDir, "bootstrap.zip")
-                val url = URL("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.instanceFollowRedirects = true
-                conn.connectTimeout = 30000
-                conn.readTimeout = 30000
-                conn.connect()
+                downloadFile("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip", zipFile)
 
-                conn.inputStream.use { input -> FileOutputStream(zipFile).use { output -> input.copyTo(output) } }
-
-                if (zipFile.length() < 1000000) {
-                    throw Exception("ZIP download corrupted or empty!")
-                }
+                if (zipFile.length() < 1000000) throw Exception("ZIP corrupted! Size: ${zipFile.length()}")
+                runOnUiThread { outputText.append("[+] Bootstrap Cached. Extracting...\n") }
 
                 val zipStream = ZipInputStream(zipFile.inputStream())
                 var entry = zipStream.nextEntry
@@ -180,7 +185,7 @@ class TerminalActivity : Activity() {
                 zipStream.close()
                 zipFile.delete()
 
-                runOnUiThread { outputText.append("[*] Constructing Architecture...\n") }
+                runOnUiThread { outputText.append("[*] Restoring Linux Symlinks...\n") }
                 symlinks.forEach { line ->
                     val parts = line.split("←")
                     if (parts.size == 2) {
@@ -196,30 +201,24 @@ class TerminalActivity : Activity() {
                     }
                 }
 
-                runOnUiThread { outputText.append("[*] Forcing Extreme Global Permissions (Fixing PRoot Chdir Bug)...\n") }
-                rootfs.walkTopDown().forEach { file ->
-                    file.setReadable(true, false)
-                    file.setWritable(true, false)
-                    file.setExecutable(true, false)
+                runOnUiThread { outputText.append("[*] Setting Permissions...\n") }
+                usrDir.walkTopDown().forEach { file ->
+                    if (file.isFile) file.setExecutable(true)
                 }
 
-                runOnUiThread { outputText.append("[*] Injecting PRoot Engine...\n") }
+                runOnUiThread { outputText.append("[*] Injecting Official PRoot...\n") }
                 val prootFile = File(filesDir, "proot")
-                val prootUrl = URL("https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static")
-                val pConn = prootUrl.openConnection() as HttpURLConnection
-                pConn.instanceFollowRedirects = true
-                pConn.connect()
-                pConn.inputStream.use { input -> FileOutputStream(prootFile).use { output -> input.copyTo(output) } }
-                prootFile.setExecutable(true, false)
+                downloadFile("https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static", prootFile)
+                prootFile.setExecutable(true)
 
                 runOnUiThread {
-                    outputText.append("\n[+] SYSTEM DEPLOYED & PERMISSIONS UNLOCKED! 🎉\n")
+                    outputText.append("\n[+] ENGINE READY! W^X Bypass Active. 🎉\n")
                     checkSystemStatus()
                     runBtn.isEnabled = true
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    outputText.append("[-] Build Failed: ${e.message}\n")
+                    outputText.append("[-] Payload Failed: ${e.message}\n")
                     runBtn.isEnabled = true
                 }
             }
