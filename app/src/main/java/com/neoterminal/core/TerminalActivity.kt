@@ -7,7 +7,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
+import android.system.Os
 import android.graphics.Color
 
 class TerminalActivity : Activity() {
@@ -21,19 +23,19 @@ class TerminalActivity : Activity() {
         val rootLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.BLACK) }
         outputText = TextView(this).apply { setTextColor(Color.GREEN); textSize = 14f; setPadding(16,16,16,16) }
         scrollView = ScrollView(this).apply { addView(outputText); layoutParams = LinearLayout.LayoutParams(-1, 0, 1f) }
-        inputCommand = EditText(this).apply { hint = "root@ubuntu:~#"; setTextColor(Color.BLACK); setBackgroundColor(Color.LTGRAY) }
+        inputCommand = EditText(this).apply { hint = "root@android:~#"; setTextColor(Color.BLACK); setBackgroundColor(Color.LTGRAY) }
         runBtn = Button(this).apply { text = "EXECUTE" }
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (PURE USERLAND ARCHITECTURE).\n"
+        outputText.text = "[*] NeoTerm Pro (W^X BYPASS ENGINE).\n"
         checkSystemStatus()
 
         runBtn.setOnClickListener {
             val cmd = inputCommand.text.toString().trim()
             if (cmd.isNotEmpty()) {
                 if (cmd.lowercase() == "hack" || cmd.lowercase() == "bootstrap") {
-                    deployUserlandPayload()
+                    deployUltimatePayload()
                 } else {
                     executeCommand(cmd)
                 }
@@ -43,15 +45,18 @@ class TerminalActivity : Activity() {
     }
 
     private fun checkSystemStatus() {
-        val rootfs = File(filesDir, "ubuntu-fs")
-        val bashFile = File(rootfs, "bin/bash")
         val prootFile = File(filesDir, "proot")
+        val bashFile = File(filesDir, "usr/bin/bash")
 
         runOnUiThread {
-            if (!bashFile.exists() || !prootFile.exists()) {
-                outputText.append("[!] Ubuntu RootFS missing. Type 'bootstrap' to install correctly.\n")
+            outputText.append("\n[DEBUG] Core Status:\n")
+            outputText.append(" -> proot: ${prootFile.exists()}\n")
+            outputText.append(" -> bash: ${bashFile.exists()} (${bashFile.length()} bytes)\n")
+
+            if (!bashFile.exists() || !prootFile.exists() || bashFile.length() == 0L) {
+                outputText.append("[!] Engine missing. Type 'hack' to deploy.\n")
             } else {
-                outputText.append("[+] UserLAnd Ubuntu Core Active! Try 'apt update'.\n")
+                outputText.append("[+] Core Ready. Try 'apt update'.\n")
             }
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
@@ -64,29 +69,31 @@ class TerminalActivity : Activity() {
         thread {
             try {
                 val prootFile = File(filesDir, "proot")
-                val rootfs = File(filesDir, "ubuntu-fs")
+                val usrDir = File(filesDir, "usr")
+
+                val guestPrefix = "/data/data/com.termux/files/usr"
+                val guestHome = "/data/data/com.termux/files/home"
+                val guestTmp = "$guestPrefix/tmp"
 
                 val pb = ProcessBuilder()
                 pb.directory(filesDir)
                 pb.redirectErrorStream(true)
 
-                if (prootFile.exists() && File(rootfs, "bin/bash").exists()) {
-                    // EXACT UserLAnd Execution Command (Pure Linux standard paths)
+                val env = pb.environment()
+                env.clear()
+                env["PROOT_TMP_DIR"] = filesDir.absolutePath
+                env["PROOT_NO_SECCOMP"] = "1"
+
+                val secureCmd = "export PATH=$guestPrefix/bin:/system/bin:/system/xbin; export LD_LIBRARY_PATH=$guestPrefix/lib; export PREFIX=$guestPrefix; export TMPDIR=$guestTmp; export HOME=$guestHome; $cmd"
+
+                if (prootFile.exists() && File(usrDir, "bin/bash").exists()) {
                     pb.command(
                         prootFile.absolutePath,
                         "--link2symlink",
                         "-0",
-                        "-r", rootfs.absolutePath,
-                        "-b", "/dev",
-                        "-b", "/proc",
-                        "-b", "/sys",
-                        "-w", "/root",
-                        "/usr/bin/env", "-i",
-                        "HOME=/root",
-                        "PATH=/usr/local/sbin:/usr/local/bin:/bin:/usr/bin:/sbin:/usr/sbin:/usr/games:/usr/local/games",
-                        "TERM=xterm-256color",
-                        "LANG=C.UTF-8",
-                        "/bin/bash", "-c", cmd
+                        "-b", "${usrDir.absolutePath}:$guestPrefix",
+                        "-w", guestHome,
+                        "/system/bin/sh", "-c", secureCmd
                     )
                 } else {
                     pb.command("sh", "-c", cmd)
@@ -123,62 +130,85 @@ class TerminalActivity : Activity() {
         conn.connectTimeout = 30000
         conn.readTimeout = 30000
         conn.connect()
+
+        if (conn.responseCode != HttpURLConnection.HTTP_OK) {
+            throw Exception("Server returned ${conn.responseCode} for $urlStr")
+        }
+
         conn.inputStream.use { input -> FileOutputStream(dest).use { output -> input.copyTo(output) } }
     }
 
-    private fun deployUserlandPayload() {
+    private fun deployUltimatePayload() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] INITIATING PURE USERLAND ARCHITECTURE...\n")
+        outputText.append("\n[*] INITIATING ULTIMATE W^X BYPASS PAYLOAD...\n")
         thread {
             try {
-                val rootfs = File(filesDir, "ubuntu-fs")
-                if (rootfs.exists()) rootfs.deleteRecursively()
-                rootfs.mkdirs()
+                val usrDir = File(filesDir, "usr")
+                if (usrDir.exists()) usrDir.deleteRecursively()
+                usrDir.mkdirs()
 
-                runOnUiThread { outputText.append("[*] Downloading Core Engines (PRoot & BusyBox)...\n") }
-                val prootFile = File(filesDir, "proot")
-                val busyboxFile = File(filesDir, "busybox")
-                downloadFile("https://raw.githubusercontent.com/EXALAB/AnLinux-Resources/master/tar/proot/proot-aarch64", prootFile)
-                downloadFile("https://raw.githubusercontent.com/EXALAB/AnLinux-Resources/master/tar/busybox/busybox-aarch64", busyboxFile)
-                prootFile.setExecutable(true)
-                busyboxFile.setExecutable(true)
+                runOnUiThread { outputText.append("[*] Downloading Official Bootstrap...\n") }
+                val zipFile = File(filesDir, "bootstrap.zip")
+                downloadFile("https://github.com/termux/termux-packages/releases/latest/download/bootstrap-aarch64.zip", zipFile)
 
-                runOnUiThread { outputText.append("[*] Downloading Official Ubuntu RootFS (Please wait, ~30MB)...\n") }
-                val tarFile = File(filesDir, "ubuntu.tar.xz")
-                downloadFile("https://raw.githubusercontent.com/EXALAB/AnLinux-Resources/master/Rootfs/Ubuntu/arm64/ubuntu-rootfs-arm64.tar.xz", tarFile)
+                if (zipFile.length() < 1000000) throw Exception("ZIP corrupted! Size: ${zipFile.length()}")
+                runOnUiThread { outputText.append("[+] Bootstrap Cached. Extracting...\n") }
 
-                runOnUiThread { outputText.append("[*] Extracting RootFS Natively (UserLAnd Method)...\n") }
-                // EXACT UserLAnd Native Extraction: Uses PRoot and Busybox to extract tarball so symlinks are created natively inside the chroot
-                val extractCmd = arrayOf(
-                    prootFile.absolutePath,
-                    "--link2symlink",
-                    "-0",
-                    busyboxFile.absolutePath,
-                    "tar",
-                    "-xJf",
-                    tarFile.absolutePath,
-                    "-C",
-                    rootfs.absolutePath
-                )
+                val zipStream = ZipInputStream(zipFile.inputStream())
+                var entry = zipStream.nextEntry
+                val symlinks = mutableListOf<String>()
 
-                val process = Runtime.getRuntime().exec(extractCmd, null, filesDir)
-                val reader = process.errorStream.bufferedReader()
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    runOnUiThread { outputText.append("  $line\n") }
+                while (entry != null) {
+                    if (entry.name == "SYMLINKS.txt") {
+                        val content = String(zipStream.readBytes())
+                        symlinks.addAll(content.lines().filter { it.contains("←") })
+                    } else {
+                        val file = File(usrDir, entry.name)
+                        if (entry.isDirectory) { file.mkdirs() } else {
+                            file.parentFile?.mkdirs()
+                            FileOutputStream(file).use { zipStream.copyTo(it) }
+                        }
+                    }
+                    zipStream.closeEntry()
+                    entry = zipStream.nextEntry
                 }
-                process.waitFor()
+                zipStream.close()
+                zipFile.delete()
 
-                tarFile.delete() // Cleanup
+                runOnUiThread { outputText.append("[*] Restoring Linux Symlinks...\n") }
+                symlinks.forEach { line ->
+                    val parts = line.split("←")
+                    if (parts.size == 2) {
+                        val target = parts[0]
+                        val link = File(usrDir, parts[1])
+                        if (link.exists()) link.delete()
+                        try { Os.symlink(target, link.absolutePath) } catch (e: Exception) {
+                            try {
+                                val targetFile = File(link.parentFile, target)
+                                if (targetFile.exists()) targetFile.copyTo(link, overwrite = true)
+                            } catch (ex: Exception) {}
+                        }
+                    }
+                }
+
+                runOnUiThread { outputText.append("[*] Setting Permissions...\n") }
+                usrDir.walkTopDown().forEach { file ->
+                    if (file.isFile) file.setExecutable(true)
+                }
+
+                runOnUiThread { outputText.append("[*] Injecting Official PRoot...\n") }
+                val prootFile = File(filesDir, "proot")
+                downloadFile("https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static", prootFile)
+                prootFile.setExecutable(true)
 
                 runOnUiThread {
-                    outputText.append("\n[+] PURE UBUNTU ROOTFS INSTALLED SUCCESSFULLY! 🎉\n")
+                    outputText.append("\n[+] ENGINE READY! W^X Bypass Active. 🎉\n")
                     checkSystemStatus()
                     runBtn.isEnabled = true
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    outputText.append("[-] Setup Failed: ${e.message}\n")
+                    outputText.append("[-] Payload Failed: ${e.message}\n")
                     runBtn.isEnabled = true
                 }
             }
