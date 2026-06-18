@@ -28,7 +28,7 @@ class TerminalActivity : Activity() {
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (TROJAN HORSE ENGINE ACTIVE).\n"
+        outputText.text = "[*] NeoTerm Pro (APEX-BYPASS BIND ENGINE).\n"
         checkSystemStatus()
 
         runBtn.setOnClickListener {
@@ -46,21 +46,16 @@ class TerminalActivity : Activity() {
 
     private fun checkSystemStatus() {
         val rootfs = File(filesDir, "rootfs")
-        val usrDir = File(rootfs, "data/data/com.termux/files/usr")
-        val bashFile = File(usrDir, "bin/bash")
-        val aptFile = File(usrDir, "bin/apt")
+        val termuxBase = File(rootfs, "data/data/com.termux/files")
+        val bashFile = File(termuxBase, "usr/bin/bash")
+        val aptFile = File(termuxBase, "usr/bin/apt")
         val prootFile = File(filesDir, "proot")
 
         runOnUiThread {
-            outputText.append("\n[DEBUG] Core Status Check:\n")
-            outputText.append(" -> proot: ${prootFile.exists()}\n")
-            outputText.append(" -> bash: ${bashFile.exists()} (${bashFile.length()} bytes)\n")
-            outputText.append(" -> apt: ${aptFile.exists()}\n")
-
             if (!bashFile.exists() || !prootFile.exists() || bashFile.length() == 0L) {
                 outputText.append("[!] Core incomplete. Type 'hack' to run safe-deploy.\n")
             } else {
-                outputText.append("[+] Core Validated & Ready! Try 'apt update'.\n")
+                outputText.append("[+] APEX Core Validated! Path Translation Active. Try 'apt update'.\n")
             }
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
@@ -73,13 +68,18 @@ class TerminalActivity : Activity() {
         thread {
             try {
                 val prootFile = File(filesDir, "proot")
-                val rootfs = File(filesDir, "rootfs")
                 val hostTmp = File(filesDir, "proot_host_tmp")
                 if (!hostTmp.exists()) hostTmp.mkdirs()
 
+                // Real local paths
+                val rootfs = File(filesDir, "rootfs")
+                val termuxBase = File(rootfs, "data/data/com.termux/files")
+
+                // Virtual target paths
                 val guestPrefix = "/data/data/com.termux/files/usr"
                 val guestHome = "/data/data/com.termux/files/home"
                 val guestTmp = "$guestPrefix/tmp"
+                val guestBash = "$guestPrefix/bin/bash"
 
                 val pb = ProcessBuilder()
                 pb.directory(filesDir)
@@ -90,20 +90,18 @@ class TerminalActivity : Activity() {
                 env["PROOT_TMP_DIR"] = hostTmp.absolutePath
                 env["PROOT_NO_SECCOMP"] = "1"
 
-                // We inject the toxic Termux variables INSIDE the native shell command string
-                val secureCmd = "export PATH=$guestPrefix/bin:/system/bin:/system/xbin; export LD_LIBRARY_PATH=$guestPrefix/lib; export PREFIX=$guestPrefix; export TMPDIR=$guestTmp; export HOME=$guestHome; $cmd"
+                // We run Android's native sh, export vars, and exec Termux bash
+                // Using double quotes around cmd to handle arguments safely
+                val secureCmd = "export PATH=$guestPrefix/bin:/system/bin:/system/xbin; export LD_LIBRARY_PATH=$guestPrefix/lib; export PREFIX=$guestPrefix; export TMPDIR=$guestTmp; export HOME=$guestHome; exec $guestBash -c \"$cmd\""
 
-                if (prootFile.exists()) {
-                    // THE TROJAN HORSE: Use Android's native trusted /system/bin/sh as the PRoot entry!
+                if (prootFile.exists() && termuxBase.exists()) {
+                    // THE ULTIMATE FIX: NO `-r rootfs`. Just bind-mount the specific folder!
+                    // This leaves Android's /apex and /system perfectly intact, preventing Exit 255.
                     pb.command(
                         prootFile.absolutePath,
                         "--link2symlink",
                         "-0",
-                        "-r", rootfs.absolutePath,
-                        "-b", "/system",
-                        "-b", "/dev",
-                        "-b", "/proc",
-                        "-b", "${hostTmp.absolutePath}:$guestTmp",
+                        "-b", "${termuxBase.absolutePath}:/data/data/com.termux/files",
                         "-w", guestHome,
                         "/system/bin/sh", "-c", secureCmd
                     )
@@ -125,7 +123,7 @@ class TerminalActivity : Activity() {
 
                 val exitCode = process.waitFor()
                 runOnUiThread {
-                    outputText.append("[DEBUG] Command Finished. Exit Code: $exitCode\n")
+                    if (exitCode != 0) outputText.append("[DEBUG] Exit Code: $exitCode\n")
                     scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
                 }
             } catch (e: Exception) {
@@ -165,7 +163,7 @@ class TerminalActivity : Activity() {
                 if (zipFile.length() < 1000000) {
                     throw Exception("ZIP download corrupted or empty! Size: ${zipFile.length()} bytes")
                 }
-                runOnUiThread { outputText.append("[+] Cache verified (${zipFile.length()} bytes). Extracting...\n") }
+                runOnUiThread { outputText.append("[+] Cache verified. Extracting...\n") }
 
                 val zipStream = ZipInputStream(zipFile.inputStream())
                 var entry = zipStream.nextEntry
@@ -219,7 +217,7 @@ class TerminalActivity : Activity() {
                 prootFile.setExecutable(true)
 
                 runOnUiThread {
-                    outputText.append("\n[+] TROJAN SYSTEM INITIALIZED! 🎉\n")
+                    outputText.append("\n[+] NUCLEAR SYSTEM INITIALIZED! 🎉\n")
                     checkSystemStatus()
                     runBtn.isEnabled = true
                 }
