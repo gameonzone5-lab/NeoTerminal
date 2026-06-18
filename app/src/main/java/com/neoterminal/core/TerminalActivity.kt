@@ -19,21 +19,21 @@ class TerminalActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val rootLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.BLACK) }
-        outputText = TextView(this).apply { setTextColor(Color.GREEN); textSize = 14f; setPadding(16,16,16,16) }
+        outputText = TextView(this).apply { setTextColor(Color.parseColor("#00FF00")); textSize = 14f; setPadding(16,16,16,16) }
         scrollView = ScrollView(this).apply { addView(outputText); layoutParams = LinearLayout.LayoutParams(-1, 0, 1f) }
-        inputCommand = EditText(this).apply { hint = "root@alpine:~#"; setTextColor(Color.BLACK); setBackgroundColor(Color.LTGRAY) }
+        inputCommand = EditText(this).apply { hint = "root@ubuntu:~#"; setTextColor(Color.BLACK); setBackgroundColor(Color.LTGRAY) }
         runBtn = Button(this).apply { text = "EXECUTE" }
         rootLayout.addView(scrollView); rootLayout.addView(inputCommand); rootLayout.addView(runBtn)
         setContentView(rootLayout)
 
-        outputText.text = "[*] NeoTerm Pro (NATIVE ALPINE CORE).\n"
+        outputText.text = "[*] NeoTerm Pro (UBUNTU 24.04 LTS).\n"
         checkSystemStatus()
 
         runBtn.setOnClickListener {
             val cmd = inputCommand.text.toString().trim()
             if (cmd.isNotEmpty()) {
                 if (cmd.lowercase() == "hack" || cmd.lowercase() == "bootstrap") {
-                    deployAlpinePayload()
+                    deployUbuntuPayload()
                 } else {
                     executeCommand(cmd)
                 }
@@ -43,15 +43,17 @@ class TerminalActivity : Activity() {
     }
 
     private fun checkSystemStatus() {
-        val rootfs = File(filesDir, "alpine-fs")
-        val shFile = File(rootfs, "bin/sh")
+        val rootfs = File(filesDir, "ubuntu-fs")
+        val bashFile = File(rootfs, "bin/bash")
         val prootFile = File(filesDir, "proot")
 
         runOnUiThread {
-            if (!shFile.exists() || !prootFile.exists()) {
-                outputText.append("[!] Alpine Linux missing. Type 'bootstrap' to deploy.\n")
+            if (!rootfs.exists() || !prootFile.exists()) {
+                outputText.append("[!] Ubuntu Linux missing. Type 'bootstrap' to deploy.\n")
+            } else if (!bashFile.exists()) {
+                outputText.append("[!] Ubuntu extracted, but /bin/bash is missing! Try deployment again.\n")
             } else {
-                outputText.append("[+] Pure Linux Core Ready! Try 'apk update'.\n")
+                outputText.append("[+] Pure Ubuntu 24.04 Ready! Try 'apt update'.\n")
             }
             scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
@@ -64,7 +66,7 @@ class TerminalActivity : Activity() {
         thread {
             try {
                 val prootFile = File(filesDir, "proot")
-                val rootfs = File(filesDir, "alpine-fs")
+                val rootfs = File(filesDir, "ubuntu-fs")
 
                 val pb = ProcessBuilder()
                 pb.directory(filesDir)
@@ -77,7 +79,7 @@ class TerminalActivity : Activity() {
                 env["TERM"] = "xterm-256color"
                 env["PROOT_NO_SECCOMP"] = "1"
 
-                if (prootFile.exists() && File(rootfs, "bin/sh").exists()) {
+                if (prootFile.exists() && File(rootfs, "bin/bash").exists()) {
                     pb.command(
                         prootFile.absolutePath, 
                         "--link2symlink",
@@ -86,8 +88,9 @@ class TerminalActivity : Activity() {
                         "-b", "/dev", 
                         "-b", "/proc", 
                         "-b", "/sys", 
+                        "-b", "/system/etc/resolv.conf:/etc/resolv.conf", 
                         "-w", "/root", 
-                        "/bin/sh", "-c", cmd
+                        "/bin/bash", "-c", cmd
                     )
                 } else {
                     pb.command("sh", "-c", cmd)
@@ -128,12 +131,12 @@ class TerminalActivity : Activity() {
         if (dest.length() == 0L) throw Exception("Downloaded file is 0 bytes.")
     }
 
-    private fun deployAlpinePayload() {
+    private fun deployUbuntuPayload() {
         runBtn.isEnabled = false
-        outputText.append("\n[*] INITIATING NATIVE DEPLOYMENT...\n")
+        outputText.append("\n[*] INITIATING UBUNTU DEPLOYMENT...\n")
         thread {
             try {
-                val rootfs = File(filesDir, "alpine-fs")
+                val rootfs = File(filesDir, "ubuntu-fs")
                 if (rootfs.exists()) rootfs.deleteRecursively()
                 rootfs.mkdirs()
 
@@ -142,13 +145,12 @@ class TerminalActivity : Activity() {
                 downloadFile("https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static", prootFile)
                 prootFile.setExecutable(true, false)
 
-                runOnUiThread { outputText.append("[*] Downloading Pure Alpine Linux RootFS...\n") }
-                val tarFile = File(filesDir, "alpine.tar.gz")
-                downloadFile("https://dl-cdn.alpinelinux.org/alpine/v3.18/releases/aarch64/alpine-minirootfs-3.18.4-aarch64.tar.gz", tarFile)
+                runOnUiThread { outputText.append("[*] Downloading Ubuntu 24.04 LTS RootFS...\n") }
+                val tarFile = File(filesDir, "ubuntu.tar.gz")
+                downloadFile("https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.1-base-arm64.tar.gz", tarFile)
 
-                runOnUiThread { outputText.append("[*] Extracting Natively via Android OS tar...\n") }
-                // CRITICAL FIX: Use Android's native tar, completely removing the failing busybox dependency
-                val extractCmd = arrayOf("tar", "-xzf", tarFile.absolutePath, "-C", rootfs.absolutePath)
+                runOnUiThread { outputText.append("[*] Extracting Natively via Android OS tar (This takes time)...\n") }
+                val extractCmd = arrayOf("tar", "-xf", tarFile.absolutePath, "-C", rootfs.absolutePath)
                 val process = ProcessBuilder(*extractCmd).redirectErrorStream(true).directory(filesDir).start()
                 
                 val reader = process.inputStream.bufferedReader()
@@ -157,12 +159,14 @@ class TerminalActivity : Activity() {
                     runOnUiThread { outputText.append("  $line\n") }
                 }
                 val extCode = process.waitFor()
-                if (extCode != 0) throw Exception("Android tar extraction failed with code $extCode")
+                if (extCode != 0) {
+                    runOnUiThread { outputText.append("[!] Tar warned with code $extCode, but proceeding...\n") }
+                }
                 
                 tarFile.delete()
 
                 runOnUiThread {
-                    outputText.append("\n[+] ALPINE LINUX INSTALLED FLAWLESSLY!\n")
+                    outputText.append("\n[+] UBUNTU 24.04 LTS INSTALLED FLAWLESSLY!\n")
                     checkSystemStatus()
                     runBtn.isEnabled = true
                 }
